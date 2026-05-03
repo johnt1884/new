@@ -1,689 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shortcuts</title>
-     <style>
-        :root {
-            --bg-color: #3d0021;
-            --toolbar-color: #1c1c1c;
-            --root-sc-color: #ffe11f;
-            --subfolder-sc-color: #00ff1e;
-            --both-sc-color: #009dff;
-            --delete-sc-color: #ff0101;
-            --header-text-color: #01ff01;
-            --row-number-color: #fcfc01;
-            --date-text-color: #01ffff;
-            --playlist-sc-color: #ff00ff;
-        }
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: #ffffff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            max-width: 100vw;
-            overflow-x: hidden;
-        }
-        .main-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-        .main-content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .top-bar {
-            padding: 10px;
-            border-bottom: 1px solid #444444;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 36px;
-            box-sizing: border-box;
-            background-color: var(--toolbar-color);
-        }
-        .top-bar-left {
-            display: flex;
-            align-items: center;
-        }
-        .top-bar-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        #thumbnail-container {
-            flex-grow: 1;
-            padding: 0;
-            position: relative;
-            overflow: auto;
-            min-width: 0;
-        }
-        .thumbnail-wrapper {
-            display: inline-block;
-            margin-right: 10px;
-            margin-bottom: 10px;
-            vertical-align: top;
-            position: relative;
-            overflow: hidden;
-        }
-        .thumbnail {
-            object-fit: cover;
-            border-radius: 6px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            cursor: pointer;
-            position: relative;
-            display: block;
-            transform-origin: center center;
-        }
-        .thumbnail.rotate-90, .thumbnail.rotate-180, .thumbnail.rotate-270 {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 2500;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: rgba(0,0,0,0.8);
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-content {
-            background-color: #ffffff;
-            margin: auto;
-            padding: 24px;
-            border: none;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 680px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            max-height: 90vh;
-            overflow: auto;
-        }
-        .close {
-            color: #606770;
-            float: right;
-            font-size: 32px;
-            font-weight: bold;
-        }
-        .close:hover,
-        .close:focus {
-            color: #1c1e21;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        #batch-script {
-            width: 100%;
-            box-sizing: border-box;
-            border-radius: 6px;
-            border: 1px solid #ccd0d5;
-            padding: 8px;
-            font-family: "Courier New", Courier, monospace;
-            margin-top: 8px;
-            margin-bottom: 12px;
-            resize: vertical;
-        }
-        .landscape-row {
-            margin-bottom: 30px;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            width: 100%;
-        }
-        .thumbnails-container {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: stretch;
-            position: relative;
-            padding: 10px 20px;
-        }
-        .row-action-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 4px 20px;
-            background-color: var(--toolbar-color);
-            width: 100%;
-            box-sizing: border-box;
-            border-bottom: 1px solid #444444;
-            border-top: 1px solid #444444;
-        }
-        .row-action-group-left {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .row-action-group-right {
-            display: flex;
-            align-items: center;
-            overflow: hidden;
-            flex-grow: 1;
-            justify-content: flex-end;
-            margin-left: 10px;
-        }
-        .delete-cross {
-            font-size: 1.4em;
-            color: var(--delete-sc-color);
-            cursor: pointer;
-            line-height: 1;
-            user-select: none;
-            opacity: 0.3;
-            transition: opacity 0.2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 10px;
-            background-color: white;
-            border-radius: 4px;
-            padding: 0 6px;
-            height: 28px;
-            box-sizing: border-box;
-        }
-        .delete-cross:hover {
-            opacity: 1;
-        }
-        .delete-cross.active {
-            opacity: 1;
-            text-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
-        }
-        .main-container.show-numbers .thumbnails-container {
-            padding-left: 40px;
-        }
-        .thumbnail.selected-root-sc {
-            outline: 3px dashed var(--root-sc-color);
-            outline-offset: -3px;
-        }
-        .thumbnail.selected-subfolder-sc {
-            outline: 3px dashed var(--subfolder-sc-color);
-            outline-offset: -3px;
-        }
-        .thumbnail.selected-both-sc {
-            outline: 3px dashed var(--both-sc-color);
-            outline-offset: -3px;
-        }
-        .thumbnail.selected-delete-sc {
-            outline: 3px dashed var(--delete-sc-color);
-            outline-offset: -3px;
-        }
-        .thumbnail.selected-playlist-sc {
-            outline: 3px dashed var(--playlist-sc-color);
-            outline-offset: -3px;
-        }
-        .thumbnail.selected-shortcut {
-            outline: 3px dashed green;
-            outline-offset: -3px;
-        }
-        .flipped {
-            transform: scaleX(-1);
-        }
-        .rotate-90 {
-            transform: translate(-50%, -50%) rotate(90deg);
-        }
-        .rotate-180 {
-            transform: translate(-50%, -50%) rotate(180deg);
-        }
-        .rotate-270 {
-            transform: translate(-50%, -50%) rotate(270deg);
-        }
-        .rotate-90.flipped {
-            transform: translate(-50%, -50%) rotate(90deg) scaleX(-1);
-        }
-        .rotate-180.flipped {
-            transform: translate(-50%, -50%) rotate(180deg) scaleX(-1);
-        }
-        .rotate-270.flipped {
-            transform: translate(-50%, -50%) rotate(270deg) scaleX(-1);
-        }
-        #player.rotate-90 {
-            transform: rotate(90deg);
-        }
-        #player.rotate-180 {
-            transform: rotate(180deg);
-        }
-        #player.rotate-270 {
-            transform: rotate(270deg);
-        }
-        select {
-            height: 28px;
-            padding: 0 8px 0 8px;
-            padding-right: 32px;
-            border: 1px solid #444444;
-            background-color: var(--toolbar-color);
-            color: #ffffff;
-            border-radius: 0;
-            font-size: 14px;
-            box-sizing: border-box;
-            margin-right: 10px;
-            text-align: center;
-            appearance: none;
-            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
-            background-repeat: no-repeat;
-            background-position: right 8px center;
-            background-size: 16px;
-        }
-        select option {
-            padding: 8px 12px;
-            background-color: #ffffff;
-            color: #000000;
-        }
-        .bar-button {
-            min-height: 28px;
-            padding: 2px 10px;
-            border: 1px solid #444444;
-            background-color: var(--toolbar-color);
-            color: #ffffff;
-            border-radius: 0;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .bar-button:hover {
-            background-color: #166fe5;
-        }
-        .selection-type-button.active {
-            background-color: rgba(255, 255, 255, 0.2);
-            border-color: #ffffff;
-        }
-        #root-sc-btn.active {
-            outline: 3px dashed var(--root-sc-color);
-            outline-offset: -3px;
-        }
-        #subfolder-sc-btn.active {
-            outline: 3px dashed var(--subfolder-sc-color);
-            outline-offset: -3px;
-        }
-        #both-sc-btn.active {
-            outline: 3px dashed var(--both-sc-color);
-            outline-offset: -3px;
-        }
-        #delete-sc-btn.active {
-            outline: 3px dashed var(--delete-sc-color);
-            outline-offset: -3px;
-        }
-        #playlist-sc-btn.active {
-            outline: 3px dashed var(--playlist-sc-color);
-            outline-offset: -3px;
-        }
-        .project-header {
-            color: var(--header-text-color);
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-top: 20px;
-            margin-bottom: 0;
-            padding: 4px 20px;
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-            gap: 16px;
-        }
-        .date-info {
-            display: none;
-            font-size: 0.8em;
-            font-weight: normal;
-            color: var(--date-text-color);
-            margin-bottom: 4px;
-        }
-        .main-container.show-dates .date-info {
-            display: block;
-        }
-        .main-container.show-numbers .date-info {
-            padding-left: 40px;
-        }
-        .checkbox-container {
-            display: flex;
-            align-items: center;
-            margin-left: 16px;
-            color: white;
-            font-size: 14px;
-        }
-        .checkbox-container input {
-            margin-right: 4px;
-        }
-        .row-number {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: var(--row-number-color);
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 30px;
-            text-align: right;
-        }
-        .row-video-name {
-            color: var(--header-text-color);
-            font-weight: bold;
-            font-size: 1em;
-            margin-left: 10px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: #ffffff;
-            min-width: 450px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 3000;
-            top: 100%;
-            left: 0;
-            border: 1px solid #ccc;
-        }
-        .dropdown-content button {
-            color: black;
-            padding: 10px 16px;
-            text-decoration: none;
-            display: block;
-            width: 100%;
-            text-align: left;
-            border: none;
-            background-color: #ffffff;
-            cursor: pointer;
-            font-size: 14px;
-            white-space: nowrap;
-        }
-        .dropdown-content button:nth-child(even) {
-            background-color: #f2f2f2;
-        }
-        .dropdown-content button:hover {
-            background-color: #e2e2e2;
-        }
-        .dropdown-content .show {
-            display: block;
-        }
-        .options-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 16px;
-            color: black;
-            font-size: 14px;
-        }
-        .options-row:nth-child(even) {
-            background-color: #f2f2f2;
-        }
-        .options-row label {
-            cursor: pointer;
-        }
-        .options-row input[type="color"] {
-            border: none;
-            width: 30px;
-            height: 30px;
-            cursor: pointer;
-            background: none;
-        }
-        .selection-type-button {
-            display: flex;
-            align-items: center;
-        }
-        .color-circle {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-            display: inline-block;
-        }
-        .playlist-nav-btn {
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
-            border: none;
-            cursor: pointer;
-            padding: 4px 10px;
-            font-size: 18px;
-            border-radius: 4px;
-            margin: 0 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .playlist-nav-btn:hover {
-            background-color: rgba(0, 0, 0, 0.8);
-        }
-        .playlist-nav-container {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .multiplier-input {
-            width: 50px;
-            height: 30px;
-            background-color: var(--toolbar-color);
-            color: white;
-            border: 1px solid #444444;
-            padding: 0 4px;
-            margin-left: 10px;
-            text-align: center;
-        }
 
-        /* Editor Overlay Styles */
-        #editor-modal .modal-content {
-            background-color: #121212;
-            color: #eee;
-            width: 95%;
-            max-width: 1200px;
-            padding: 18px;
-            border-radius: 8px;
-        }
-        .editor-app { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-        #editor-fileInfo { font-size: 14px; color: #ddd; }
-        #editor-playerRow { display: flex; align-items: center; gap: 12px; width: 100%; justify-content: center; }
-        .editor-navBtn { background: #222; border: 2px solid #333; color: #fff; padding: 10px 12px; border-radius: 6px; cursor: pointer; font-size: 18px; }
-        #editor-playerWrap { display: flex; flex-direction: column; align-items: center; width: 100%; }
-        #editor-videoContainer { width: 100%; display: flex; align-items: center; justify-content: center; min-height: 260px; position: relative; }
-        #editor-videoOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); pointer-events: none; display: none; z-index: 10; }
-        #editor-mainVideo { max-width: 90%; max-height: 60vh; background: black; border-radius: 6px; object-fit: contain; }
-        #editor-timelineWrap { width: 98%; position: relative; user-select: none; margin-top: 10px; }
-        #editor-timeline { height: 18px; background: #333; border-radius: 9px; position: relative; cursor: pointer; margin-bottom: 36px; }
-        #editor-scrubber { position: absolute; top: 50%; left: 0; width: 22px; height: 22px; background: #fff; border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
-        #editor-progress { position: absolute; left: 0; top: 0; height: 100%; background: #00acc1; border-radius: 9px; width: 0%; }
-        .editor-marker { position: absolute; top: 0; width: 6px; height: 18px; transform: translateX(-50%); border-radius: 3px; box-shadow: 0 0 4px rgba(0,0,0,.6); }
-        .editor-marker[data-rot="270"] { background: #00e5ff; }
-        .editor-marker[data-rot="180"] { background: #ffca28; }
-        .editor-marker[data-rot="90"] { background: #ff4081; }
-        .editor-cut-region { position: absolute; top: 0; height: 100%; background: rgba(255, 82, 82, 0.5); pointer-events: none; }
-        .editor-pending-marker { position: absolute; top: -4px; width: 4px; height: 26px; transform: translateX(-50%); border-radius: 2px; background: #ff5252; }
-        .editor-delete-x { position: absolute; top: 20px; transform: translateX(-50%); font-size: 12px; cursor: pointer; color: #ccc; }
-        .editor-delete-x:hover { color: #f44336; }
-        #editor-controls { display: flex; gap: 8px; align-items: center; width: 98%; margin-top: 8px; justify-content: space-between; }
-        .editor-control-group { display: flex; gap: 8px; justify-content: center; flex: 1; }
-        .editor-frame-btn { background: #333; border: 1px solid #444; font-size: 16px; padding: 4px 10px; color: white; cursor: pointer; }
-        #editor-cutsListContainer { width: 98%; margin-top: 10px; background: #2a2a2a; border-radius: 6px; padding: 8px; max-height: 120px; overflow-y: auto; }
-        .editor-cut-item { display: flex; justify-content: space-between; align-items: center; padding: 4px; border-bottom: 1px solid #333; color: #eee; }
-        .editor-delete-cut-btn { cursor: pointer; color: #ff5252; font-weight: bold; }
-        .editor-greenBtn { background: #43a047; border: 2px solid #2e7d32; color: #fff; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <div class="main-container">
-        <div class="main-content">
-            <div class="top-bar">
-                <div class="top-bar-left">
-                    <div id="load-menu-container" style="position: relative; margin-right: 10px;">
-                        <button id="load-menu-btn" title="Load" class="bar-button" style="padding: 0 8px; display: flex; align-items: center; justify-content: center;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                        </button>
-                        <div id="load-dropdown" class="dropdown-content">
-                            <button id="load-directory-btn">Load all videos</button>
-                            <button id="load-latest-videos-btn">Load new videos</button>
-                            <button id="load-sc-btn">Load all shortcuts</button>
-                            <button id="load-root-sc-btn">Load root shortcut directory</button>
-                            <button id="create-playlist-load-btn">Create playlist</button>
-                            <button id="create-playlist-root-load-btn">Create playlist root</button>
-                            <button id="update-playlist-root-load-btn">Update playlist root</button>
-                        </div>
-                    </div>
-                    <div id="options-menu-container" style="position: relative; margin-right: 10px;">
-                        <button id="options-menu-btn" title="Options" class="bar-button" style="padding: 0 8px; display: flex; align-items: center; justify-content: center;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                            </svg>
-                        </button>
-                        <div id="options-dropdown" class="dropdown-content">
-                            <div class="options-row">
-                                <label for="bg-color-picker">Page Background</label>
-                                <input type="color" id="bg-color-picker" value="#3d0021">
-                            </div>
-                            <div class="options-row">
-                                <label for="toolbar-color-picker">Toolbars</label>
-                                <input type="color" id="toolbar-color-picker" value="#1c1c1c">
-                            </div>
-                            <div class="options-row">
-                                <label for="root-sc-color-picker">Root SC Outline</label>
-                                <input type="color" id="root-sc-color-picker" value="#ffe11f">
-                            </div>
-                            <div class="options-row">
-                                <label for="subfolder-sc-color-picker">Subfolder SC Outline</label>
-                                <input type="color" id="subfolder-sc-color-picker" value="#00ff1e">
-                            </div>
-                            <div class="options-row">
-                                <label for="both-sc-color-picker">Both SC Outline</label>
-                                <input type="color" id="both-sc-color-picker" value="#009dff">
-                            </div>
-                            <div class="options-row">
-                                <label for="delete-sc-color-picker">Delete Selection Outline</label>
-                                <input type="color" id="delete-sc-color-picker" value="#ff0101">
-                            </div>
-                            <div class="options-row">
-                                <label for="header-text-color-picker">Folder Header Text</label>
-                                <input type="color" id="header-text-color-picker" value="#01ff01">
-                            </div>
-                            <div class="options-row">
-                                <label for="row-number-color-picker">Show Numbers Header Text</label>
-                                <input type="color" id="row-number-color-picker" value="#fcfc01">
-                            </div>
-                            <div class="options-row">
-                                <label for="date-text-color-picker">Date Text Color</label>
-                                <input type="color" id="date-text-color-picker" value="#01ffff">
-                            </div>
-                            <div class="options-row">
-                                <label for="playlist-sc-color-picker">Playlist Selection Outline</label>
-                                <input type="color" id="playlist-sc-color-picker" value="#ff00ff">
-                            </div>
-                            <button id="revert-defaults-btn" style="width: 100%; text-align: center; border-top: 1px solid #ccc; font-weight: bold;">Revert to Default Colors</button>
-                        </div>
-                    </div>
-                    <select id="size-selector">
-                        <option value="0.2">20%</option>
-                        <option value="0.3">30%</option>
-                        <option value="0.4">40%</option>
-                        <option value="0.5">50%</option>
-                        <option value="0.6">60%</option>
-                        <option value="0.7">70%</option>
-                        <option value="0.8">80%</option>
-                        <option value="0.9">90%</option>
-                        <option value="1" selected>100%</option>
-                    </select>
-                    <select id="sort-selector">
-                        <option value="" disabled selected hidden>Sort</option>
-                        <option value="name-asc">Name (A-Z)</option>
-                        <option value="name-desc">Name (Z-A)</option>
-                        <option value="date-new">Date (Newest)</option>
-                        <option value="date-old">Date (Oldest)</option>
-                    </select>
-                    <button id="prev-canvas-btn" class="bar-button">&lt;</button>
-                    <select id="canvas-select"></select>
-                    <button id="next-canvas-btn" class="bar-button">&gt;</button>
-                    <select id="group-selector"></select>
-                    <div class="checkbox-container">
-                        <input type="checkbox" id="show-dates-checkbox">
-                        <label for="show-dates-checkbox">Show Dates</label>
-                    </div>
-                    <div class="checkbox-container">
-                        <input type="checkbox" id="show-numbers-checkbox">
-                        <label for="show-numbers-checkbox">Show Numbers</label>
-                    </div>
-                </div>
-                <div class="top-bar-right">
-                    <button id="shortcut-script-btn" class="bar-button">Create Shortcut Script</button>
-                    <button id="create-playlist-btn" class="bar-button" style="display: none;">Create Playlist</button>
-                    <button id="delete-shortcuts-btn" class="bar-button" style="display: none;">Delete Selected Shortcuts</button>
-                </div>
-            </div>
-            <div id="content-area" style="display: flex; flex-grow: 1; overflow: hidden;">
-                <div id="thumbnail-container">
-                    <div id="content-spacer" style="position: absolute; top: 0; left: 0; z-index: -1;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="video-modal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 90%; max-height: 90%; padding: 0; background: black; position: relative; display: flex; align-items: center; justify-content: center;">
-            <span class="close" id="close-video-modal" style="position: absolute; right: 10px; top: 4px; color: white; z-index: 3000;">&times;</span>
-            <video id="player" controls style="max-width: 100%; max-height: 100%; display: block; object-fit: contain;"></video>
-        </div>
-    </div>
-
-    <div id="editor-modal" class="modal">
-        <div class="modal-content">
-            <span class="close" id="close-editor-modal">&times;</span>
-            <div class="editor-app">
-                <div id="editor-fileInfo">No file selected</div>
-                <div id="editor-playerWrap">
-                    <div id="editor-videoContainer">
-                        <div id="editor-videoOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); pointer-events: none; display: none; z-index: 10;"></div>
-                        <video id="editor-mainVideo" controls muted preload="metadata"></video>
-                    </div>
-                    <div id="editor-timelineWrap">
-                        <div id="editor-timeline">
-                            <div id="editor-progress"></div>
-                            <div id="editor-scrubber"></div>
-                        </div>
-                    </div>
-                    <div id="editor-frameControls" class="editor-control-group" style="margin-bottom: 8px;">
-                        <button id="editor-frameBackBtn" class="editor-frame-btn">←</button>
-                        <button id="editor-frameForwardBtn" class="editor-frame-btn">→</button>
-                    </div>
-                    <div id="editor-controls">
-                        <div class="editor-control-group" style="justify-content:flex-start">
-                            <button id="editor-playPause" class="bar-button">▶️ Play</button>
-                        </div>
-                        <div class="editor-control-group">
-                            <button id="editor-markStartBtn" class="bar-button" style="border-color:#43a047">Mark Start</button>
-                            <button id="editor-rotLeft" class="bar-button" style="border-color:#00e5ff">90° Left</button>
-                            <button id="editor-rot180" class="bar-button" style="border-color:#ffca28">180°</button>
-                            <button id="editor-rotRight" class="bar-button" style="border-color:#ff4081">90° Right</button>
-                            <button id="editor-markEndBtn" class="bar-button" style="border-color:#43a047">Mark End</button>
-                            <button id="editor-cutSegmentBtn" class="bar-button" style="background:#d32f2f;color:white" disabled>Cut Segment</button>
-                        </div>
-                        <div class="editor-control-group" style="justify-content:flex-end">
-                            <span id="editor-timeDisplay" style="font-size: 12px; color: #888;">00:00.000 / 00:00.000</span>
-                        </div>
-                    </div>
-                    <div id="editor-cutsListContainer"></div>
-                    <div style="width:98%; display:flex; justify-content: flex-end; margin-top: 10px;">
-                        <button id="editor-commitBtn" class="editor-greenBtn">Commit</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="script-modal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Create Shortcut PowerShell Script</h2>
-            <p>This script will create shortcuts for your selections. Right-click and "Run with PowerShell" in your main video directory.</p>
-            <textarea id="batch-script" rows="10" cols="80" readonly></textarea>
-            <button id="copy-script-btn">Copy to Clipboard</button>
-            <a id="download-script-link" download="create_shortcuts.ps1">
-                <button>Download .ps1 File</button>
-            </a>
-        </div>
-    </div>
-
-    <script>
         const thumbnailContainer = document.getElementById('thumbnail-container');
         const scriptModal = document.getElementById('script-modal');
         const batchScriptTextArea = document.getElementById('batch-script');
@@ -783,7 +98,7 @@
             const showNumbers = showNumbersCheckbox.checked;
             mainContainer.classList.toggle('show-numbers', showNumbers);
             const containers = document.querySelectorAll('.thumbnails-container');
-            
+
             // First, remove any existing numbers to avoid duplicates
             document.querySelectorAll('.row-number').forEach(num => num.remove());
 
@@ -1083,7 +398,7 @@
                 editorModal.style.display = 'none';
                 editorMainVideo.pause();
                 editorMainVideo.src = '';
-                
+
                 // Update UI in main view
                 const row = document.querySelector(`.landscape-row[data-video-name="${editorCurrentVideo.videoName}"][data-project-path="${editorCurrentVideo.projectPath}"]`);
                 if (row) {
@@ -1211,7 +526,7 @@
                     const [fileHandle] = await window.showOpenFilePicker({
                         types: [{
                             description: 'Playlist files',
-                            accept: { 
+                            accept: {
                                 'text/plain': ['.m3u'],
                                 'audio/x-mpegurl': ['.m3u'],
                                 'application/vnd.apple.mpegurl': ['.m3u']
@@ -1258,7 +573,7 @@
             });
 
             scriptModal.querySelector('.close').addEventListener('click', () => scriptModal.style.display = 'none');
-            
+
             copyScriptBtn.addEventListener('click', () => {
                  batchScriptTextArea.select();
                  navigator.clipboard.writeText(batchScriptTextArea.value).then(() => {
@@ -1276,7 +591,7 @@
             });
 
             sizeSelector.addEventListener('change', () => layoutLandscapeThumbnails());
-            
+
             sortSelector.addEventListener('change', (e) => {
                 if(currentDirHandle) {
                     if (currentMode === 'directory') {
@@ -1382,7 +697,7 @@
                 deleteRotationBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const selectedRows = document.querySelectorAll('.landscape-row:has(.selected-root-sc), .landscape-row:has(.selected-subfolder-sc), .landscape-row:has(.selected-both-sc), .landscape-row:has(.selected-delete-sc), .landscape-row:has(.selected-playlist-sc)');
-                    
+
                     selectedRows.forEach(row => {
                         const videoName = row.dataset.videoName;
                         const projectPath = row.dataset.projectPath;
@@ -1435,7 +750,7 @@
 
         function updateCircleColors() {
             const getCircle = (btn) => btn ? btn.querySelector('.color-circle') : null;
-            
+
             const rootCircle = getCircle(rootScBtn);
             const subfolderCircle = getCircle(subfolderScBtn);
             const bothCircle = getCircle(bothScBtn);
@@ -1443,7 +758,7 @@
             const playlistCircle = getCircle(playlistScBtn);
             const rotateCircle = getCircle(rotateScBtn);
             const playCircle = getCircle(playBtn);
-            
+
             if (rootCircle) rootCircle.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--root-sc-color');
             if (subfolderCircle) subfolderCircle.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--subfolder-sc-color');
             if (bothCircle) bothCircle.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--both-sc-color');
@@ -1464,7 +779,7 @@
             currentVideoUrl = URL.createObjectURL(file);
             player.src = currentVideoUrl;
             player.classList.remove('rotate-90', 'rotate-180', 'rotate-270');
-            
+
             // Reset scaling and transforms
             player.style.transform = '';
             player.style.maxWidth = '90vw';
@@ -1554,7 +869,7 @@
                     deleteCross.style.opacity = '';
                 }
             }
-            
+
             rowDiv.querySelectorAll('.row-bar-btn').forEach(btn => {
                 btn.classList.remove('active');
                 if (btn.dataset.type && btn.dataset.type === type) {
@@ -1568,14 +883,14 @@
         function createRowActionBar(videoName, projectPath, subfolder, rowDiv) {
             const bar = document.createElement('div');
             bar.className = 'row-action-bar';
-            
+
             const leftGroup = document.createElement('div');
             leftGroup.className = 'row-action-group-left';
 
             const createBtn = (text, onClick, type = null, color = null) => {
                 const btn = document.createElement('button');
                 btn.className = 'bar-button row-bar-btn';
-                
+
                 if (color) {
                     const circle = document.createElement('span');
                     circle.className = 'color-circle';
@@ -1694,7 +1009,7 @@
 
             const rightGroup = document.createElement('div');
             rightGroup.className = 'row-action-group-right';
-            
+
             const nameSpan = document.createElement('span');
             nameSpan.className = 'row-video-name';
             nameSpan.textContent = videoName;
@@ -1753,7 +1068,7 @@
             const isPlaylist = mode === 'playlist';
             const isPlaylistRoot = mode === 'playlist-root' || mode === 'update-playlist-root';
 
-            if (deleteShortcutsBtn) deleteShortcutsBtn.style.display = 'none'; 
+            if (deleteShortcutsBtn) deleteShortcutsBtn.style.display = 'none';
             if (shortcutScriptBtn) shortcutScriptBtn.style.display = (isPlaylist || isPlaylistRoot) ? 'none' : 'inline-block';
             if (createPlaylistBtn) createPlaylistBtn.style.display = (isPlaylist || isPlaylistRoot) ? 'inline-block' : 'none';
 
@@ -1802,15 +1117,15 @@
                     wrappers.forEach(wrapper => {
                         const thumb = wrapper.querySelector('.thumbnail');
                         if (!thumb.dataset.originalWidth) return;
-                        
+
                         const originalWidth = parseFloat(thumb.dataset.originalWidth);
                         const originalHeight = parseFloat(thumb.dataset.originalHeight);
                         sampleOriginalHeight = originalHeight;
                         const scaledWidth = originalWidth * scale;
                         const scaledHeight = originalHeight * scale;
-                        
+
                         const isRotated90 = thumb.classList.contains('rotate-90') || thumb.classList.contains('rotate-270');
-                        
+
                         if (isRotated90) {
                             wrapper.style.width = scaledHeight + 'px';
                             wrapper.style.height = scaledWidth + 'px';
@@ -1818,7 +1133,7 @@
                             wrapper.style.width = scaledWidth + 'px';
                             wrapper.style.height = scaledHeight + 'px';
                         }
-                        
+
                         thumb.style.width = scaledWidth + 'px';
                         thumb.style.height = scaledHeight + 'px';
                     });
@@ -2034,23 +1349,23 @@
                     const escapedSourceProjectPath = escapePSString(sel.projectPath);
                     const escapedTargetProjectPath = escapePSString(sel.targetProject);
                     const escapedSubfolder = escapePSString(sel.subfolder);
-                    
+
                     let sourceVideoPathVar = '\$BaseDir';
                     if (escapedSourceProjectPath) sourceVideoPathVar = `(Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedSourceProjectPath}')`;
                     if (escapedSubfolder) sourceVideoPathVar = `(Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedSubfolder}')`;
                     scriptLines.push(`\$sourceVideoPath = Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedVideoName}'`);
-                    
+
                     let targetVideoPathVar = `(Join-Path -Path \"$BaseDir\" -ChildPath '${escapedTargetProjectPath}')`;
                     scriptLines.push(`\$targetVideoPath = Join-Path -Path ${targetVideoPathVar} -ChildPath '${escapedVideoName}'`);
-                    
+
                     scriptLines.push('if (Test-Path -LiteralPath \"$sourceVideoPath\") {');
                     scriptLines.push('    Move-Item -LiteralPath \"$sourceVideoPath\" -Destination \"$targetVideoPath\" -Force');
                     scriptLines.push(`    Write-Host "Moved video to: ${escapedTargetProjectPath}\\${escapedVideoName}"`);
                     scriptLines.push('}');
-                    
+
                     const thumbBase = sel.videoName.substring(0, sel.videoName.lastIndexOf('.'));
                     const escapedThumbBase = escapePSString(thumbBase);
-                    
+
                     scriptLines.push(`\$sourceProjectPath = ${escapedSourceProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedSourceProjectPath}'` : '\$BaseDir'}`);
                     scriptLines.push(`\$targetProjectPath = Join-Path -Path \"$BaseDir\" -ChildPath '${escapedTargetProjectPath}'`);
                     scriptLines.push(`\$thumbDirs = @('Thumbnails', 'Edit Thumbnails')`);
@@ -2088,7 +1403,7 @@
                     scriptLines.push(`    \$shortcut.Save()`);
                     scriptLines.push(`    Write-Host "Updated root shortcut target for ${escapedVideoName}"`);
                     scriptLines.push(`}`);
-                    
+
                     scriptLines.push('');
                 });
             }
@@ -2121,7 +1436,7 @@
                 scriptLines.push('if (-not (Test-Path -Path \"$rootScFolder\")) { New-Item -ItemType Directory -Path \"$rootScFolder\" -Force | Out-Null }');
                 scriptLines.push('');
             }
-            
+
             subfolderProjects.forEach(projectPath => {
                 const escapedProjectPath = escapePSString(projectPath);
                 if (escapedProjectPath) {
@@ -2147,13 +1462,13 @@
             selectionsToProcess.forEach(sel => {
                 const key = sel.projectPath + '|' + sel.videoName;
                 const initial = initialShortcutSelections.get(key);
-                
+
                 const hasEdits = (sel.cuts && sel.cuts.length > 0) ||
                                (sel.markers && sel.markers.length > 0) ||
                                (sel.rotation && sel.rotation !== "0") ||
                                sel.flipped;
 
-                
+
                 const selectionType = sel.type;
                 if (!selectionType || selectionType === 'delete-sc') return;
 
@@ -2168,7 +1483,7 @@
                     if (escapedProjectPath) sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${escapedProjectPath}')`;
                     if (escapedSubfolder) sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${escapedSubfolder}')`;
                     scriptLines.push(`    \$sourceVideoPath = Join-Path -Path ${sourcePathVar} -ChildPath '${escapedVideoName}'`);
-                    
+
                     scriptLines.push(`    \$cuts = @()`);
                     sel.cuts.forEach(c => {
                         scriptLines.push(`    \$cuts += @{ start = ${c.start}; end = ${c.end} }`);
@@ -2190,7 +1505,7 @@
                     scriptLines.push(`    if (Test-Path -LiteralPath \"$processedVideoPath\") {`);
                     scriptLines.push(`        Move-Item -LiteralPath \"$processedVideoPath\" -Destination \"$sourceVideoPath\" -Force`);
                     scriptLines.push(`        Write-Host "Applied edits to: ${escapedVideoName}"`);
-                    
+
                     // Clear rotation metadata for this file since it's now burnt-in
                     const projPath = sel.projectPath;
                     const escapedProjPath = escapePSString(projPath);
@@ -2236,17 +1551,17 @@
                 }
 
                 if (selectionType === 'subfolder-sc' || selectionType === 'both-sc') {
-                    let scDirPath;
-                    const projectPathToUse = escapedTargetProjectPath || escapedProjectPath;
-                    if (projectPathToUse) {
-                        scDirPath = `Join-Path -Path (Join-Path -Path \"$BaseDir\" -ChildPath '${projectPathToUse}') -ChildPath 'sc'`;
-                    } else {
-                        scDirPath = 'Join-Path -Path \"$BaseDir\" -ChildPath \'sc\'';
+                        let scDirPath;
+                        const projectPathToUse = escapedTargetProjectPath || escapedProjectPath;
+                        if (projectPathToUse) {
+                            scDirPath = `Join-Path -Path (Join-Path -Path \"$BaseDir\" -ChildPath '${projectPathToUse}') -ChildPath 'sc'`;
+                        } else {
+                            scDirPath = 'Join-Path -Path \"$BaseDir\" -ChildPath \'sc\'';
+                        }
+                        const logPath = (escapedProjectPath ? escapedProjectPath + '\\' : '') + escapedVideoName;
+                        createShortcut(`Join-Path -Path (${scDirPath}) -ChildPath ('${escapedVideoName}' + '.lnk')`, `Created subfolder shortcut: ${logPath}`);
                     }
-                    const logPath = (escapedProjectPath ? escapedProjectPath + '\\' : '') + escapedVideoName;
-                    createShortcut(`Join-Path -Path (${scDirPath}) -ChildPath ('${escapedVideoName}' + '.lnk')`, `Created subfolder shortcut: ${logPath}`);
                 }
-
                 scriptLines.push('');
             });
 
@@ -2258,20 +1573,20 @@
                     const escapedVideoName = escapePSString(sel.videoName);
                     const escapedProjectPath = escapePSString(sel.projectPath);
                     const escapedSubfolder = escapePSString(sel.subfolder);
-                    
+
                     let videoPathVar = '\$BaseDir';
                     if (escapedProjectPath) videoPathVar = `(Join-Path -Path ${videoPathVar} -ChildPath '${escapedProjectPath}')`;
                     if (escapedSubfolder) videoPathVar = `(Join-Path -Path ${videoPathVar} -ChildPath '${escapedSubfolder}')`;
                     scriptLines.push(`\$videoPath = Join-Path -Path ${videoPathVar} -ChildPath '${escapedVideoName}'`);
-                    
+
                     scriptLines.push('if (Test-Path -LiteralPath \"$videoPath\") {');
                     scriptLines.push('    Remove-Item -LiteralPath \"$videoPath\" -Force');
                     scriptLines.push(`    Write-Host "Deleted video: ${escapedVideoName}"`);
                     scriptLines.push('}');
-                    
+
                     const thumbBase = sel.videoName.substring(0, sel.videoName.lastIndexOf('.'));
                     const escapedThumbBase = escapePSString(thumbBase);
-                    
+
                     let projectPathVar = '\$BaseDir';
                     if (escapedProjectPath) {
                         projectPathVar = `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedProjectPath}'`;
@@ -2330,7 +1645,7 @@
 
             // --- Rotation Data ---
             const rotationUpdates = new Map(); // projectPath -> { toAdd: {}, toRemove: [] }
-            
+
             const getUpdate = (proj) => {
                 if (!rotationUpdates.has(proj)) {
                     rotationUpdates.set(proj, { toAdd: {}, toRemove: [] });
@@ -2341,7 +1656,7 @@
             shortcutSelections.forEach((sel, key) => {
                 const initial = initialShortcutSelections.get(key);
                 const isMoved = sel.targetProject && sel.targetProject !== sel.projectPath;
-                
+
                 const currentRot = sel.rotation || "0";
                 const initialRot = (initial && initial.rotation) || "0";
                 const currentFlipped = !!sel.flipped;
@@ -2376,7 +1691,7 @@
                     const escapedProjectPath = escapePSString(projectPath);
                     const projectPathVar = escapedProjectPath ? `(Join-Path -Path \"$BaseDir\" -ChildPath '${escapedProjectPath}')` : '\$BaseDir';
                     const rotationFileVar = `(Join-Path -Path ${projectPathVar} -ChildPath 'rotation_data.txt')`;
-                    
+
                     scriptLines.push(`\$toAdd = @{`);
                     for (const [vName, rot] of Object.entries(update.toAdd)) {
                         scriptLines.push(`    '${escapePSString(vName)}' = '${rot}'`);
@@ -2502,7 +1817,7 @@
 
             if (selectedProjectPaths.size > 0) {
                 scriptLines.push('# --- Placing Genuine Timestamps ---');
-                
+
                 selectedProjectPaths.forEach(projectPath => {
                     const escapedProjectPath = escapePSString(projectPath);
                     const projectPathVar = escapedProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedProjectPath}'` : '\$BaseDir';
@@ -2517,7 +1832,7 @@
 
             if (dummyTimestampProjects.size > 0) {
                 scriptLines.push('# --- Placing Dummy Timestamps ---');
-                
+
                 dummyTimestampProjects.forEach(projectPath => {
                     const escapedProjectPath = escapePSString(projectPath);
                     const projectPathVar = escapedProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedProjectPath}'` : '\$BaseDir';
@@ -2530,7 +1845,7 @@
                 });
             }
 
-            
+
             scriptLines.push('Write-Host "Script execution complete."');
             scriptLines.push('Read-Host -Prompt "Press Enter to exit"');
 
@@ -2579,7 +1894,7 @@
 
         async function getScDataForProject(projectHandle) {
             const allShortcuts = new Set();
-            
+
             async function scanDir(dirHandle) {
                 try {
                     const handle = await dirHandle.getFileHandle('scdata.txt');
@@ -2594,7 +1909,7 @@
                     }
                 }
             }
-            
+
             await scanDir(projectHandle);
             console.log(`Loaded ${allShortcuts.size} shortcuts from project (recursive): ${projectHandle.name}`);
             return allShortcuts;
@@ -2713,17 +2028,17 @@
                         const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
                         try {
                             await findDirectoryHandleByName(entry, 'Edit Thumbnails');
-                            
+
                             let timestamp = 0;
                             if (isNewOnly) {
                                 timestamp = (await getTimestamp(entry)) || 0;
                             }
 
-                            projectFolders.push({ 
-                                handle: entry, 
-                                path: newPath, 
+                            projectFolders.push({
+                                handle: entry,
+                                path: newPath,
                                 name: entry.name,
-                                timestamp: timestamp 
+                                timestamp: timestamp
                             });
                         } catch (e) {
                            await findProjectFolders(entry, newPath);
@@ -2731,16 +2046,16 @@
                     }
                 }
             }
-            
+
             try {
                 await findDirectoryHandleByName(currentDirHandle, 'Edit Thumbnails');
                 let timestamp = 0;
                 if (isNewOnly) {
                     timestamp = (await getTimestamp(currentDirHandle)) || 0;
                 }
-                projectFolders.push({ 
-                    handle: currentDirHandle, 
-                    path: '', 
+                projectFolders.push({
+                    handle: currentDirHandle,
+                    path: '',
                     name: currentDirHandle.name,
                     timestamp: timestamp
                 });
@@ -2761,7 +2076,7 @@
             if (!isProject) {
                 currentDirScData = await getRootScData(currentDirHandle);
             }
-            
+
             const hasProjectHeaders = Array.from(currentDirScData.keys()).some(k => k !== "");
             if (hasProjectHeaders || (currentDirScData.size > 0 && !isProject)) {
                 // currentDirHandle looks like a root directory
@@ -2872,10 +2187,10 @@
                     console.log(`Processing project: ${project.name} (Path: ${project.path})`);
                     const projectScData = await getScDataForProject(project.handle);
                     const projectRotationData = await getRotationData(project.handle);
-                    
+
                     const normalizedProjectName = normalizeProjectKey(project.name);
                     const normalizedProjectPath = normalizeProjectKey(project.path);
-                    
+
                     let rootProjectShortcutsSet = rootScDataSets.get(normalizedProjectName) || new Set();
                     if (rootProjectShortcutsSet.size === 0 && normalizedProjectPath && normalizedProjectPath !== normalizedProjectName) {
                         rootProjectShortcutsSet = rootScDataSets.get(normalizedProjectPath) || new Set();
@@ -2928,7 +2243,7 @@
                     }, {});
 
                     const videoFileMap = new Map(projectVideoFiles.map(f => [f.name.substring(0, f.name.lastIndexOf('.')), f]));
-                    
+
                     let videoNames = Object.keys(groupedFiles);
                     videoNames.sort((a, b) => {
                         if (sortBy === 'name-asc') return a.localeCompare(b);
@@ -2963,7 +2278,7 @@
                                 }
                             }
                         }
-                        
+
                         // Also check the global/ungrouped shortcuts if still not found
                         if (!rootScEntry) {
                             const globalRootScSet = rootScDataSets.get("");
@@ -2971,7 +2286,7 @@
                                 rootScEntry = checkShortcut(videoFile.name, globalRootScSet);
                             }
                         }
-                        
+
                         let hasRootSc = rootScEntry !== false;
 
                         // In update-playlist-root mode, we ALSO check if the shortcut file exists directly in sc/
@@ -3085,7 +2400,7 @@
 
                         if ((initialShortcutType || rotation !== "0" || flipped) && currentMode !== 'playlist-root' && currentMode !== 'update-playlist-root') {
                             const key = project.path + '|' + videoFile.name;
-                            const selectionData = { 
+                            const selectionData = {
                                 videoName: videoFile.name, projectPath: project.path, subfolder: videoFile.subfolder,
                                 type: initialShortcutType || '', rotation: rotation, flipped: flipped
                             };
@@ -3107,7 +2422,7 @@
                             if (flipped) img.classList.add('flipped');
                             wrapper.appendChild(img);
                             thumbnailsContainer.appendChild(wrapper);
-                            
+
                             const promise = new Promise((resolve, reject) => {
                                 img.onload = () => {
                                     img.dataset.originalWidth = img.width;
@@ -3180,14 +2495,14 @@
                     thumbnailContainer.innerHTML = '<p style="color: black;">scnew.txt is empty. No new shortcuts to display.</p>';
                     return;
                 }
-                
+
                 const groupedBySubfolder = new Map();
                 for (const path of shortcutPaths) {
                     const parts = path.split('\\');
                     if (parts.length >= 3) {
                         const subfolderName = parts[parts.length - 3];
                         const shortcutFileName = parts[parts.length - 1];
-                        
+
                         if (!groupedBySubfolder.has(subfolderName)) {
                             groupedBySubfolder.set(subfolderName, []);
                         }
@@ -3253,7 +2568,7 @@
                             const rotData = projectRotationData.get(videoBaseName.toLowerCase()) || { rotation: "0", flipped: false };
                             const rotation = rotData.rotation;
                             const flipped = rotData.flipped;
-                            
+
                             if (rotation !== "0" || flipped) {
                                 const key = subfolderName + '|' + videoBaseName;
                                 if (!shortcutSelections.has(key)) {
@@ -3377,10 +2692,10 @@
                         const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
                         try {
                             await findDirectoryHandleByName(entry, 'Edit Thumbnails');
-                            projectFolders.push({ 
-                                handle: entry, 
-                                path: newPath, 
-                                name: entry.name 
+                            projectFolders.push({
+                                handle: entry,
+                                path: newPath,
+                                name: entry.name
                             });
                         } catch (e) {
                             await findProjectFolders(entry, newPath);
@@ -3391,9 +2706,9 @@
 
             try {
                 await findDirectoryHandleByName(currentDirHandle, 'Edit Thumbnails');
-                projectFolders.push({ 
-                    handle: currentDirHandle, 
-                    path: '', 
+                projectFolders.push({
+                    handle: currentDirHandle,
+                    path: '',
                     name: currentDirHandle.name
                 });
             } catch (e) {
@@ -3431,7 +2746,7 @@
 
                     const normalizedProjectName = normalizeProjectKey(project.name);
                     const normalizedProjectPath = normalizeProjectKey(project.path);
-                    
+
                     // Search in rootScData for a matching key
                     let rootProjectShortcutsMap = new Map();
                     for (let [key, val] of rootScData.entries()) {
@@ -3459,7 +2774,7 @@
                     if (videoFiles.length === 0) continue;
 
                     videoFiles.sort((a, b) => a.name.localeCompare(b.name));
-                    
+
                     let candidateVideos = [];
                     const shortcutNames = new Set();
                     try {
@@ -3549,7 +2864,7 @@
                         const video = candidateVideos[index];
                         const videoFile = await video.getFile();
                         dateInfo.textContent = `Created: ${new Date(videoFile.lastModified).toLocaleString()}`;
-                        
+
                         const videoBaseName = video.name.substring(0, video.name.lastIndexOf('.'));
                         const editDirHandle = await findDirectoryHandleByName(project.handle, 'Edit Thumbnails');
                         const thumbnailFiles = [];
@@ -3636,7 +2951,7 @@
                     console.warn(`Could not process project '${project.name}' for playlist mode:`, e);
                 }
             }
-            
+
             canvases.set(canvasId, { id: canvasId, name: 'Playlist View', elements: canvasElements, path: '' });
             await Promise.all(allImageLoadPromises);
             renderCanvas(canvasId);
@@ -3771,7 +3086,7 @@
                             targetPathConstruction = `(Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedSubfolder}')`;
                         }
                         targetPathConstruction = `Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedVideoName}'`;
-                        
+
                         scriptLines.push(`\$targetPath = [System.IO.Path]::GetFullPath((${targetPathConstruction}))`);
                         scriptLines.push(`Add-PlaylistEntry -path \$targetPath -rotation '${rotation}' -multiplier ${multiplier} -rotationKey '${escapedVideoName}'`);
                         scriptLines.push(`Write-Host "Added to playlist (video): ${escapedVideoName} (${multiplier}x)"`);
@@ -3890,7 +3205,7 @@
             scriptLines.push('    Write-Host "Updated MPV autorotate script at: \$luaPath"');
             scriptLines.push('}');
 
-            
+
             scriptLines.push('Write-Host "Total items in playlist: \$(\$script:playlistContent.Count - 1)"');
             scriptLines.push('Read-Host -Prompt "Press Enter to exit"');
 
@@ -3912,7 +3227,7 @@
                 // In root scdata.txt/rootdata.txt, project headers are often quoted.
                 const isQuoted = (line.startsWith('"') && line.endsWith('"')) || (line.startsWith("'") && line.endsWith("'"));
                 const cleanLine = line.replace(/^["']|["']$/g, '').trim();
-                
+
                 let entry = cleanLine;
                 let tag = "";
                 if (cleanLine.endsWith('[BOTH]')) {
@@ -3922,7 +3237,7 @@
                     tag = "ROOT";
                     entry = cleanLine.substring(0, cleanLine.length - 6).trim();
                 }
-                
+
                 const isShortcut = entry.toLowerCase().endsWith('.lnk') || entry.toLowerCase().endsWith('.ink') || entry.toLowerCase().endsWith(' - shortcut.lnk');
                 const isVideo = entry.toLowerCase().match(/\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|mpg|mpeg)$/i);
 
@@ -3944,7 +3259,3 @@
         }
 
         init();
-
-    </script>
-</body>
-</html>
