@@ -1873,11 +1873,6 @@
                 sel.flipped
             );
 
-            if (hasEditorChanges) {
-                // If there are editor changes, we'll generate a script that handles both shortcuts and video processing
-                // For simplicity and since the user asked for edit/s to be carried out when script is generated
-                // we will integrate FFmpeg logic.
-            }
 
             const displayedProjectPaths = new Set(Array.from(canvases.values()).map(c => c.path));
             const selectedProjectPaths = new Set();
@@ -1968,7 +1963,7 @@
                 '        # Use braces for variables in vf to avoid ParserError with colons',
                 '        \$vf = "\$transpose"',
                 '        if (\$flipped) { \$vf += "hflip," }',
-                '        \$vf += "scale=w=\$maxW:h=\$maxH:force_original_aspect_ratio=decrease,pad=\$maxW:\$maxH:(ow-iw)/2:(oh-ih)/2"',
+                '        \$vf += "scale=w=\${maxW}:h=\${maxH}:force_original_aspect_ratio=decrease,pad=\${maxW}:\${maxH}:(ow-iw)/2:(oh-ih)/2"',
                 '        ',
                 '        \$dur = (\$seg.end - \$seg.start).ToString("F3")',
                 '        Write-Host "  > Encoding segment \$segIndex: \$(\$seg.start) to \$(\$seg.end) (Rot: \$(\$seg.rotation))"',
