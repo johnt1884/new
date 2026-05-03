@@ -1375,11 +1375,23 @@
             player.addEventListener('click', closeModal);
 
             deleteShortcutsBtn.addEventListener('click', () => {
-                if (shortcutSelections.size === 0) {
-                    alert('Please select one or more shortcuts to delete.');
+                const hasSelections = shortcutSelections.size > 0;
+                const hasDeletions = Array.from(initialShortcutSelections.keys()).some(key => !shortcutSelections.has(key));
+                const hasModifiedType = Array.from(shortcutSelections.entries()).some(([key, sel]) => {
+                    const initial = initialShortcutSelections.get(key);
+                    return initial && (initial.type !== sel.type);
+                });
+                const hasModifiedRotation = Array.from(shortcutSelections.entries()).some(([key, sel]) => {
+                    const initial = initialShortcutSelections.get(key);
+                    return initial && (initial.rotation !== sel.rotation);
+                });
+                const hasDummyTimestamp = dummyTimestampProjects.size > 0;
+
+                if (!hasSelections && !hasDeletions && !hasModifiedType && !hasModifiedRotation && !hasDummyTimestamp) {
+                    alert('No changes to save.');
                     return;
                 }
-                generateDeleteScript();
+                generateShortcutScript();
                 scriptModal.style.display = 'block';
             });
 
@@ -1957,7 +1969,7 @@
                 '        ',
                 '        \$dur = (\$seg.end - \$seg.start).ToString("F3")',
                 '        ffmpeg -y -i "\$sourcePath" -ss \$seg.start.ToString("F3") -t \$dur -vf "\$vf" -c:v libx264 -crf 17 -preset veryslow -c:a copy -avoid_negative_ts make_zero "\$outSeg" 2>\$null',
-                '        (echo "file '\$outSeg'") | Out-File -FilePath "\$listPath" -Append -Encoding utf8',
+                '        (echo "file \'\$outSeg\'") | Out-File -FilePath "\$listPath" -Append -Encoding utf8',
                 '    }',
                 '    ',
                 '    ffmpeg -y -f concat -safe 0 -i "\$listPath" -c copy "\$targetPath" 2>\$null',
