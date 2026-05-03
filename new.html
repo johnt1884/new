@@ -1890,7 +1890,7 @@
                     selectedProjectPaths.add(s.projectPath || "");
                 }
             });
-            const dummyTimestampProjects = new Set([...displayedProjectPaths].filter(p => !selectedProjectPaths.has(p)));
+            dummyTimestampProjects = new Set([...displayedProjectPaths].filter(p => !selectedProjectPaths.has(p)));
 
             let scriptLines = [
                 'if (\$PSScriptRoot) { \$BaseDir = \$PSScriptRoot }',
@@ -1901,20 +1901,19 @@
                 '',
                 'function Process-Video {',
                 '    param([string]\$sourcePath, [string]\$targetPath, [array]\$cuts, [array]\$markers, [bool]\$flipped)',
+                '    Write-Host "--- Processing Video: \$([System.IO.Path]::GetFileName(\$sourcePath)) ---" -ForegroundColor Cyan',
                 '    if (-not \$sourcePath -or -not (Test-Path -LiteralPath \$sourcePath)) { Write-Host "Source path empty or invalid: \$sourcePath"; return }',
                 '    \$tempDir = Join-Path -Path \$env:TEMP -ChildPath ([System.Guid]::NewGuid().ToString())',
                 '    New-Item -ItemType Directory -Path "\$tempDir" | Out-Null',
                 '    ',
-                '    \$baseName = [System.IO.Path]::GetFileNameWithoutExtension(\$sourcePath)',
-                '    \$safeBase = \$baseName -replace "[^a-zA-Z0-9_]", "_"',
-                '    ',
                 '    \$duration = (ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "\$sourcePath") -as [double]',
+                '    Write-Host "Duration: \$duration seconds"',
                 '    ',
                 '    \$points = New-Object System.Collections.Generic.List[double]',
                 '    \$points.Add(0)',
                 '    \$points.Add(\$duration)',
-                '    foreach (\$m in \$markers) { \$points.Add(\$m.time) }',
-                '    foreach (\$c in \$cuts) { \$points.Add(\$c.start); \$points.Add(\$c.end) }',
+                '    if (\$markers) { foreach (\$m in \$markers) { \$points.Add(\$m.time) } }',
+                '    if (\$cuts) { foreach (\$c in \$cuts) { \$points.Add(\$c.start); \$points.Add(\$c.end) } }',
                 '    ',
                 '    \$sortedPoints = \$points | Sort-Object | Select-Object -Unique',
                 '    ',
@@ -1934,11 +1933,11 @@
                 '        ',
                 '        \$mid = (\$start + \$end) / 2',
                 '        \$isCut = \$false',
-                '        foreach (\$c in \$cuts) { if (\$mid -ge \$c.start -and \$mid -lt \$c.end) { \$isCut = \$true; break } }',
+                '        if (\$cuts) { foreach (\$c in \$cuts) { if (\$mid -ge \$c.start -and \$mid -lt \$c.end) { \$isCut = \$true; break } } }',
                 '        if (\$isCut) { continue }',
                 '        ',
                 '        \$rotation = 0',
-                '        foreach (\$m in \$markers) { if (\$start -ge \$m.time) { \$rotation = \$m.rotation } }',
+                '        if (\$markers) { foreach (\$m in \$markers) { if (\$start -ge \$m.time) { \$rotation = \$m.rotation } } }',
                 '        ',
                 '        if (\$rotation -eq 90 -or \$rotation -eq 270) {',
                 '            \$curW = \$sh; \$curH = \$sw',
@@ -1967,16 +1966,18 @@
                 '        elseif (\$seg.rotation -eq 270) { \$transpose = "transpose=2," }',
                 '        ',
                 '        # Use braces for variables in vf to avoid ParserError with colons',
-                '        \$vf = "\${transpose}"',
+                '        \$vf = "\$transpose"',
                 '        if (\$flipped) { \$vf += "hflip," }',
-                '        \$vf += "scale=w=\${maxW}:h=\${maxH}:force_original_aspect_ratio=decrease,pad=\${maxW}:\${maxH}:(ow-iw)/2:(oh-ih)/2"',
+                '        \$vf += "scale=w=\$maxW:h=\$maxH:force_original_aspect_ratio=decrease,pad=\$maxW:\$maxH:(ow-iw)/2:(oh-ih)/2"',
                 '        ',
                 '        \$dur = (\$seg.end - \$seg.start).ToString("F3")',
-                '        ffmpeg -y -i "\$sourcePath" -ss \$seg.start.ToString("F3") -t \$dur -vf "\$vf" -c:v libx264 -crf 17 -preset veryslow -c:a copy -avoid_negative_ts make_zero "\$outSeg" 2>\$null',
+                '        Write-Host "  > Encoding segment \$segIndex: \$(\$seg.start) to \$(\$seg.end) (Rot: \$(\$seg.rotation))"',
+                '        ffmpeg -y -i "\$sourcePath" -ss \$(\$seg.start.ToString("F3")) -t "\$dur" -vf "\$vf" -c:v libx264 -crf 17 -preset veryslow -c:a copy -avoid_negative_ts make_zero "\$outSeg"',
                 '        (echo "file \'\$outSeg\'") | Out-File -FilePath "\$listPath" -Append -Encoding utf8',
                 '    }',
                 '    ',
-                '    ffmpeg -y -f concat -safe 0 -i "\$listPath" -c copy "\$targetPath" 2>\$null',
+                '    Write-Host "  > Concatenating segments..."',
+                '    ffmpeg -y -f concat -safe 0 -i "\$listPath" -c copy "\$targetPath"',
                 '    Remove-Item -Path "\$tempDir" -Recurse -Force',
                 '}',
                 '',
@@ -2001,25 +2002,55 @@
                 '    }',
                 '}',
                 '',
-                'function Verify-Shortcuts {',
-                '    param([array]\$shortcutPaths)',
-                '    if (-not \$shortcutPaths) { return }',
-                '    Write-Host "`n--- Verifying Touched Shortcuts ---" -ForegroundColor Cyan',
-                '    foreach (\$path in \$shortcutPaths) {',
-                '        if (Test-Path -LiteralPath \$path) {',
-                '            try {',
-                '                \$target = \$wshell.CreateShortcut(\$path).TargetPath',
-                '                if (-not (Test-Path -LiteralPath \$target)) {',
-                '                    Write-Host "BROKEN: \$path -> \$target" -ForegroundColor Red',
-                '                } else {',
-                '                    Write-Host "VALID:  \$([System.IO.Path]::GetFileName(\$path))" -ForegroundColor Green',
-                '                }',
-                '            } catch {',
-                '                Write-Host "ERROR verifying \$([System.IO.Path]::GetFileName(\$path)): \$(\$_.Exception.Message)" -ForegroundColor Yellow',
-                '            }',
-                '        } else {',
-                '            Write-Host "MISSING: \$path" -ForegroundColor Red',
+                'function Manage-Shortcut {',
+                '    param([string]\$folderPath, [string]\$videoName, [string]\$targetPath, [bool]\$shouldExist)',
+                '    if (-not (Test-Path -LiteralPath \$folderPath)) {',
+                '        if (\$shouldExist) { New-Item -ItemType Directory -Path \$folderPath -Force | Out-Null }',
+                '        else { return }',
+                '    }',
+                '    \$baseName = [System.IO.Path]::GetFileNameWithoutExtension(\$videoName)',
+                '    \$extensions = @(".lnk", ".ink")',
+                '    \$variants = @()',
+                '    foreach (\$ext in \$extensions) {',
+                '        \$variants += Join-Path -Path \$folderPath -ChildPath (\$videoName + \$ext)',
+                '        \$variants += Join-Path -Path \$folderPath -ChildPath (\$baseName + \$ext)',
+                '        \$variants += Join-Path -Path \$folderPath -ChildPath (\$videoName + " - Shortcut" + \$ext)',
+                '        \$variants += Join-Path -Path \$folderPath -ChildPath (\$baseName + " - Shortcut" + \$ext)',
+                '    }',
+                '    \$existing = \$variants | Where-Object { Test-Path -LiteralPath \$_ }',
+                '    if (-not \$shouldExist) {',
+                '        foreach (\$path in \$existing) {',
+                '            Remove-Item -LiteralPath \$path -Force',
+                '            Write-Host "Removed obsolete shortcut: \$path" -ForegroundColor Yellow',
                 '        }',
+                '        return',
+                '    }',
+                '    \$primaryPath = Join-Path -Path \$folderPath -ChildPath (\$videoName + ".lnk")',
+                '    if (\$existing.Count -gt 0) {',
+                '        foreach (\$path in \$existing) {',
+                '            try {',
+                '                \$sc = \$wshell.CreateShortcut(\$path)',
+                '                if (\$sc.TargetPath -eq \$targetPath) {',
+                '                    if (\$path -ne \$primaryPath) {',
+                '                        Move-Item -LiteralPath \$path -Destination \$primaryPath -Force',
+                '                        Write-Host "Standardized shortcut name: \$primaryPath" -ForegroundColor Gray',
+                '                    }',
+                '                    return',
+                '                }',
+                '                Remove-Item -LiteralPath \$path -Force',
+                '                Write-Host "Removed incorrect shortcut: \$path" -ForegroundColor Gray',
+                '            } catch {',
+                '                Remove-Item -LiteralPath \$path -Force',
+                '            }',
+                '        }',
+                '    }',
+                '    try {',
+                '        \$sc = \$wshell.CreateShortcut(\$primaryPath)',
+                '        \$sc.TargetPath = \$targetPath',
+                '        \$sc.Save()',
+                '        Write-Host "Created shortcut: \$primaryPath" -ForegroundColor Green',
+                '    } catch {',
+                '        Write-Host "FAILED to create shortcut: \$primaryPath" -ForegroundColor Red',
                 '    }',
                 '}',
                 ''
@@ -2219,37 +2250,25 @@
                 }
                 targetPathConstruction = `Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedVideoName}'`;
 
-                scriptLines.push(`    # Shortcut for: ${sel.projectPath}\\${sel.videoName} (Type: ${selectionType})`);
-                scriptLines.push(`    \$targetPath = ${targetPathConstruction}`);
+                scriptLines.push(`    # Managing shortcuts for: ${sel.projectPath}\\${sel.videoName} (Selection: ${selectionType})`);
+                scriptLines.push(`    \$targetPath = [System.IO.Path]::GetFullPath((${targetPathConstruction}))`);
 
-                const createShortcut = (scPath, logMsg) => {
-                    scriptLines.push(`    \$shortcutPath = ${scPath}`);
-                    scriptLines.push('    try {');
-                    scriptLines.push('        \$shortcut = \$wshell.CreateShortcut(\$shortcutPath)');
-                    scriptLines.push('        \$shortcut.TargetPath = \$targetPath');
-                    scriptLines.push('        \$shortcut.Save()');
-                    scriptLines.push(`        Write-Host "${logMsg}"`);
-                    scriptLines.push('    } catch {');
-                    scriptLines.push('        Write-Host "FAILED to create shortcut: \$shortcutPath" -ForegroundColor Red');
-                    scriptLines.push('        Write-Host \$_.Exception.Message -ForegroundColor Red');
-                    scriptLines.push('    }');
-                };
+                const wantRoot = (selectionType === 'root-sc' || selectionType === 'both-sc');
+                const wantSub = (selectionType === 'subfolder-sc' || selectionType === 'both-sc');
 
-                if (selectionType === 'root-sc' || selectionType === 'both-sc') {
-                    createShortcut(`Join-Path -Path \"$rootScFolder\" -ChildPath ('${escapedVideoName}' + '.lnk')`, `Created root shortcut: ${escapedVideoName}`);
+                // Root location
+                scriptLines.push(`    Manage-Shortcut -folderPath \$rootScFolder -videoName '${escapedVideoName}' -targetPath \$targetPath -shouldExist ${wantRoot ? '$true' : '$false'}`);
+
+                // Subfolder location
+                let scDirPath;
+                const projectPathToUse = escapedTargetProjectPath || escapedProjectPath;
+                if (projectPathToUse) {
+                    scDirPath = `Join-Path -Path \"$BaseDir\" -ChildPath '${projectPathToUse}'`;
+                    scDirPath = `Join-Path -Path (${scDirPath}) -ChildPath 'sc'`;
+                } else {
+                    scDirPath = 'Join-Path -Path \"$BaseDir\" -ChildPath \'sc\'';
                 }
-
-                if (selectionType === 'subfolder-sc' || selectionType === 'both-sc') {
-                    let scDirPath;
-                    const projectPathToUse = escapedTargetProjectPath || escapedProjectPath;
-                    if (projectPathToUse) {
-                        scDirPath = `Join-Path -Path (Join-Path -Path \"$BaseDir\" -ChildPath '${projectPathToUse}') -ChildPath 'sc'`;
-                    } else {
-                        scDirPath = 'Join-Path -Path \"$BaseDir\" -ChildPath \'sc\'';
-                    }
-                    const logPath = (escapedProjectPath ? escapedProjectPath + '\\' : '') + escapedVideoName;
-                    createShortcut(`Join-Path -Path (${scDirPath}) -ChildPath ('${escapedVideoName}' + '.lnk')`, `Created subfolder shortcut: ${logPath}`);
-                }
+                scriptLines.push(`    Manage-Shortcut -folderPath (${scDirPath}) -videoName '${escapedVideoName}' -targetPath \$targetPath -shouldExist ${wantSub ? '$true' : '$false'}`);
 
                 scriptLines.push('');
             });
