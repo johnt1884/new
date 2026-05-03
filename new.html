@@ -2170,17 +2170,21 @@
                     scriptLines.push(`    \$sourceVideoPath = Join-Path -Path ${sourcePathVar} -ChildPath '${escapedVideoName}'`);
                     
                     scriptLines.push(`    \$cuts = @()`);
-                    sel.cuts.forEach(c => {
-                        scriptLines.push(`    \$cuts += @{ start = ${c.start}; end = ${c.end} }`);
-                    });
+                    if (sel.cuts) {
+                        sel.cuts.forEach(c => {
+                            scriptLines.push(`    \$cuts += @{ start = ${c.start}; end = ${c.end} }`);
+                        });
+                    }
                     scriptLines.push(`    \$markers = @()`);
-                    sel.markers.forEach(m => {
-                        // markers in selection use 'frame', we need 'time'
-                        const fps = sel.fps || 30;
-                        const time = m.frame / fps;
-                        scriptLines.push(`    \$markers += @{ time = ${time}; rotation = ${m.rotation} }`);
-                    });
-                    if (sel.markers.length === 0 && sel.rotation && sel.rotation !== "0") {
+                    if (sel.markers) {
+                        sel.markers.forEach(m => {
+                            // markers in selection use 'frame', we need 'time'
+                            const fps = sel.fps || 30;
+                            const time = m.frame / fps;
+                            scriptLines.push(`    \$markers += @{ time = ${time}; rotation = ${m.rotation} }`);
+                        });
+                    }
+                    if ((!sel.markers || sel.markers.length === 0) && sel.rotation && sel.rotation !== "0") {
                         scriptLines.push(`    \$markers += @{ time = 0; rotation = ${sel.rotation} }`);
                     }
 
