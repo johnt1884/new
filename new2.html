@@ -1971,7 +1971,7 @@
                 '        \$dur = (\$seg.end - \$seg.start).ToString("F3")',
                 '        Write-Host "  > Encoding segment \$($segIndex): \$($seg.start) to \$($seg.end) (Rot: \$($seg.rotation))"',
                 '        ffmpeg -y -i "\$sourcePath" -ss \$(\$seg.start.ToString("F3")) -t "\$dur" -vf "\$vf" -c:v libx264 -crf 17 -preset veryslow -c:a copy -avoid_negative_ts make_zero "\$outSeg"',
-                '        (echo "file \'\$outSeg\'") | Out-File -FilePath "\$listPath" -Append -Encoding utf8',
+                '        [System.IO.File]::AppendAllLines(\$listPath, [string[]](\"file \'\$outSeg\'\"))',
                 '    }',
                 '    ',
                 '    Write-Host "  > Concatenating segments..."',
@@ -3693,7 +3693,8 @@
             let scriptLines = [
                 'if (\$PSScriptRoot) { \$BaseDir = \$PSScriptRoot }',
                 'else { \$BaseDir = Split-Path -Parent -Path \$MyInvocation.MyCommand.Definition -ErrorAction SilentlyContinue }',
-                'if (-not \$BaseDir) { \$BaseDir = "." }',
+                'if (-not \$BaseDir) { \$BaseDir = Get-Location }',
+                '\$BaseDir = [System.IO.Path]::GetFullPath(\$BaseDir)',
                 '\$script:playlistContent = New-Object System.Collections.Generic.List[string]',
                 '\$script:playlistContent.Add("#EXTM3U")',
                 '\$script:addedTargets = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)',
@@ -3788,10 +3789,6 @@
                 );
             }
 
-            scriptLines[0] = 'if (\$PSScriptRoot) { \$BaseDir = \$PSScriptRoot }';
-            scriptLines[1] = 'else { \$BaseDir = Split-Path -Parent -Path \$MyInvocation.MyCommand.Definition -ErrorAction SilentlyContinue }';
-            scriptLines[2] = 'if (-not \$BaseDir) { \$BaseDir = Get-Location }';
-            scriptLines.splice(3, 0, '\$BaseDir = [System.IO.Path]::GetFullPath(\$BaseDir)');
 
             const selections = Array.from(shortcutSelections.values());
 
