@@ -1890,7 +1890,8 @@
             let scriptLines = [
                 'if (\$PSScriptRoot) { \$BaseDir = \$PSScriptRoot }',
                 'else { \$BaseDir = Split-Path -Parent -Path \$MyInvocation.MyCommand.Definition -ErrorAction SilentlyContinue }',
-                'if (-not \$BaseDir) { \$BaseDir = "." }',
+                'if (-not \$BaseDir) { \$BaseDir = Get-Location }',
+                '\$BaseDir = [System.IO.Path]::GetFullPath(\$BaseDir)',
                 '\$wshell = New-Object -ComObject WScript.Shell',
                 '\$newShortcuts = @()',
                 '\$desktopFolder = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)',
@@ -2027,7 +2028,7 @@
                 '        foreach (\$path in \$existing) {',
                 '            try {',
                 '                \$sc = \$wshell.CreateShortcut(\$path)',
-                '                if (\$sc.TargetPath -eq \$targetPath) {',
+                '                if ([System.IO.Path]::GetFullPath(\$sc.TargetPath).TrimEnd(\"\\\") -eq \$targetPath.TrimEnd(\"\\\")) {',
                 '                    if (\$path -ne \$primaryPath) {',
                 '                        Move-Item -LiteralPath \$path -Destination \$primaryPath -Force',
                 '                        Write-Host "Standardized shortcut name: \$primaryPath" -ForegroundColor Gray',
@@ -2068,19 +2069,22 @@
                     if (escapedSubfolder) sourceVideoPathVar = `(Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedSubfolder}')`;
                     scriptLines.push(`\$sourceVideoPath = Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedVideoName}'`);
                     
-                    let targetVideoPathVar = `(Join-Path -Path \"$BaseDir\" -ChildPath '${escapedTargetProjectPath}')`;
+                    let targetVideoPathVar = '\$BaseDir';
+                    if (escapedTargetProjectPath) {
+                        targetVideoPathVar = `(Join-Path -Path ${targetVideoPathVar} -ChildPath '${escapedTargetProjectPath}')`;
+                    }
                     scriptLines.push(`\$targetVideoPath = Join-Path -Path ${targetVideoPathVar} -ChildPath '${escapedVideoName}'`);
                     
                     scriptLines.push('if (Test-Path -LiteralPath \"$sourceVideoPath\") {');
                     scriptLines.push('    Move-Item -LiteralPath \"$sourceVideoPath\" -Destination \"$targetVideoPath\" -Force');
-                    scriptLines.push(`    Write-Host "Moved video to: ${escapedTargetProjectPath}\\${escapedVideoName}"`);
+                    scriptLines.push(`    Write-Host "Moved video to: ${escapedTargetProjectPath || '(Root)'}\\${escapedVideoName}"`);
                     scriptLines.push('}');
                     
                     const thumbBase = sel.videoName.substring(0, sel.videoName.lastIndexOf('.'));
                     const escapedThumbBase = escapePSString(thumbBase);
                     
                     scriptLines.push(`\$sourceProjectPath = ${escapedSourceProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedSourceProjectPath}'` : '\$BaseDir'}`);
-                    scriptLines.push(`\$targetProjectPath = Join-Path -Path \"$BaseDir\" -ChildPath '${escapedTargetProjectPath}'`);
+                    scriptLines.push(`\$targetProjectPath = ${escapedTargetProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedTargetProjectPath}'` : '\$BaseDir'}`);
                     scriptLines.push(`\$thumbDirs = @('Thumbnails', 'Edit Thumbnails')`);
                     scriptLines.push(`foreach (\$dirName in \$thumbDirs) {`);
                     scriptLines.push(`    \$srcDirPath = Join-Path -Path \"$sourceProjectPath\" -ChildPath \$dirName`);
@@ -2188,13 +2192,20 @@
                 const escapedVideoName = escapePSString(sel.videoName);
                 const escapedProjectPath = escapePSString(sel.projectPath);
                 const escapedSubfolder = escapePSString(sel.subfolder);
-                const escapedTargetProjectPath = sel.targetProject ? escapePSString(sel.targetProject) : null;
+                const escapedTargetProjectPath = (sel.targetProject !== undefined) ? escapePSString(sel.targetProject) : null;
+
+                const isMoved = (escapedTargetProjectPath !== null);
 
                 if (hasEdits) {
                     scriptLines.push(`    # Processing edits for: ${sel.projectPath}\\${sel.videoName}`);
                     let sourcePathVar = '\$BaseDir';
-                    if (escapedProjectPath) sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${escapedProjectPath}')`;
-                    if (escapedSubfolder) sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${escapedSubfolder}')`;
+                    const currentProjPathForEdit = isMoved ? escapedTargetProjectPath : escapedProjectPath;
+                    if (currentProjPathForEdit) {
+                        sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${currentProjPathForEdit}')`;
+                    }
+                    if (!isMoved && escapedSubfolder) {
+                        sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${escapedSubfolder}')`;
+                    }
                     scriptLines.push(`    \$sourceVideoPath = Join-Path -Path ${sourcePathVar} -ChildPath '${escapedVideoName}'`);
                     
                     scriptLines.push(`    \$cuts = @()`);
@@ -2233,7 +2244,7 @@
                 }
 
                 let targetPathConstruction = '\$BaseDir';
-                if (escapedTargetProjectPath !== null) {
+                if (isMoved) {
                     if (escapedTargetProjectPath !== '') {
                         targetPathConstruction = `(Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedTargetProjectPath}')`;
                     }
@@ -2264,11 +2275,11 @@
 
                 // Subfolder location
                 let scDirPath = '\$BaseDir';
-                const projectPathToUse = escapedTargetProjectPath || escapedProjectPath;
+                const projectPathToUse = isMoved ? escapedTargetProjectPath : escapedProjectPath;
                 if (projectPathToUse) {
                     scDirPath = `(Join-Path -Path ${scDirPath} -ChildPath '${projectPathToUse}')`;
                 }
-                if (escapedSubfolder) {
+                if (!isMoved && escapedSubfolder) {
                     scDirPath = `(Join-Path -Path ${scDirPath} -ChildPath '${escapedSubfolder}')`;
                 }
                 scDirPath = `(Join-Path -Path ${scDirPath} -ChildPath 'sc')`;
@@ -3776,6 +3787,11 @@
                     ''
                 );
             }
+
+            scriptLines[0] = 'if (\$PSScriptRoot) { \$BaseDir = \$PSScriptRoot }';
+            scriptLines[1] = 'else { \$BaseDir = Split-Path -Parent -Path \$MyInvocation.MyCommand.Definition -ErrorAction SilentlyContinue }';
+            scriptLines[2] = 'if (-not \$BaseDir) { \$BaseDir = Get-Location }';
+            scriptLines.splice(3, 0, '\$BaseDir = [System.IO.Path]::GetFullPath(\$BaseDir)');
 
             const selections = Array.from(shortcutSelections.values());
 
