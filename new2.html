@@ -579,10 +579,10 @@
                         <option value="0.4">40%</option>
                         <option value="0.5">50%</option>
                         <option value="0.6">60%</option>
-                        <option value="0.7">70%</option>
+                        <option value="0.7" selected>70%</option>
                         <option value="0.8">80%</option>
                         <option value="0.9">90%</option>
-                        <option value="1" selected>100%</option>
+                        <option value="1">100%</option>
                     </select>
                     <select id="sort-selector">
                         <option value="" disabled selected hidden>Sort</option>
@@ -1966,13 +1966,23 @@
                 '        elseif (\$seg.rotation -eq 270) { \$transpose = "transpose=2," }',
                 '        ',
                 '        # Use braces for variables in vf to avoid ParserError with colons',
-                '        \$vf = "\$transpose"',
-                '        if (\$flipped) { \$vf += "hflip," }',
-                '        \$vf += "scale=w=\$($targetW):h=\$($targetH):force_original_aspect_ratio=decrease,pad=\$($targetW):\$($targetH):(ow-iw)/2:(oh-ih)/2"',
+                '        \$vfArr = @()',
+                '        if (\$transpose) { \$vfArr += \$transpose.TrimEnd(\',\') }',
+                '        if (\$flipped) { \$vfArr += "hflip" }',
+                '        ',
+                '        \$curW = \$sw; \$curH = \$sh',
+                '        if (\$seg.rotation -eq 90 -or \$seg.rotation -eq 270) { \$curW = \$sh; \$curH = \$sw }',
+                '        ',
+                '        if (\$curW -ne \$targetW -or \$curH -ne \$targetH) {',
+                '            \$vfArr += "scale=w=\$($targetW):h=\$($targetH):force_original_aspect_ratio=decrease,pad=\$($targetW):\$($targetH):(ow-iw)/2:(oh-ih)/2"',
+                '        }',
+                '        ',
+                '        \$vf = \$vfArr -join ","',
+                '        \$vfArg = if (\$vf) { @("-vf", \$vf) } else { @() }',
                 '        ',
                 '        \$dur = (\$seg.end - \$seg.start).ToString("F3")',
                 '        Write-Host "  > Encoding segment \$($segIndex): \$($seg.start) to \$($seg.end) (Rot: \$($seg.rotation))"',
-                '        ffmpeg -y -i "\$sourcePath" -ss \$(\$seg.start.ToString("F3")) -t "\$dur" -vf "\$vf" -c:v libx264 -crf 17 -preset veryslow -c:a copy -avoid_negative_ts make_zero "\$outSeg"',
+                '        ffmpeg -y -i "\$sourcePath" -ss \$(\$seg.start.ToString("F3")) -t "\$dur" @vfArg -c:v libx264 -crf 17 -preset veryslow -c:a copy -avoid_negative_ts make_zero "\$outSeg"',
                 '        [System.IO.File]::AppendAllLines(\$listPath, [string[]](\"file \'\$outSeg\'\"))',
                 '    }',
                 '    ',
@@ -2075,6 +2085,9 @@
                     if (escapedTargetProjectPath) {
                         targetVideoPathVar = `(Join-Path -Path ${targetVideoPathVar} -ChildPath '${escapedTargetProjectPath}')`;
                     }
+                    if (escapedSubfolder) {
+                        targetVideoPathVar = `(Join-Path -Path ${targetVideoPathVar} -ChildPath '${escapedSubfolder}')`;
+                    }
                     scriptLines.push(`\$targetVideoPath = Join-Path -Path ${targetVideoPathVar} -ChildPath '${escapedVideoName}'`);
                     
                     scriptLines.push('if (Test-Path -LiteralPath \"$sourceVideoPath\") {');
@@ -2087,6 +2100,9 @@
                     
                     scriptLines.push(`\$sourceProjectPath = ${escapedSourceProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedSourceProjectPath}'` : '\$BaseDir'}`);
                     scriptLines.push(`\$targetProjectPath = ${escapedTargetProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedTargetProjectPath}'` : '\$BaseDir'}`);
+                    if (escapedSubfolder) {
+                        scriptLines.push(`\$targetProjectPath = Join-Path -Path \$targetProjectPath -ChildPath '${escapedSubfolder}'`);
+                    }
                     scriptLines.push(`\$thumbDirs = @('Thumbnails', 'Edit Thumbnails')`);
                     scriptLines.push(`foreach (\$dirName in \$thumbDirs) {`);
                     scriptLines.push(`    \$srcDirPath = Join-Path -Path \"$sourceProjectPath\" -ChildPath \$dirName`);
