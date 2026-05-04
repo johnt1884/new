@@ -1900,7 +1900,11 @@
                 'function Process-Video {',
                 '    param([string]\$sourcePath, [string]\$targetPath, [array]\$cuts, [array]\$markers, [bool]\$flipped)',
                 '    Write-Host "--- Processing Video: \$([System.IO.Path]::GetFileName(\$sourcePath)) ---" -ForegroundColor Cyan',
-                '    if (-not \$sourcePath -or -not (Test-Path -LiteralPath \$sourcePath)) { Write-Host "Source path empty or invalid: \$sourcePath"; return }',
+                '    if (-not \$sourcePath -or -not (Test-Path -LiteralPath \$sourcePath)) { ',
+                '        Write-Host "Source path empty or invalid: \$sourcePath" -ForegroundColor Red',
+                '        Write-Host "BaseDir is: \$BaseDir"',
+                '        return ',
+                '    }',
                 '    \$tempDir = Join-Path -Path \$env:TEMP -ChildPath ([System.Guid]::NewGuid().ToString())',
                 '    New-Item -ItemType Directory -Path "\$tempDir" | Out-Null',
                 '    ',
@@ -2194,7 +2198,7 @@
                 const escapedSubfolder = escapePSString(sel.subfolder);
                 const escapedTargetProjectPath = (sel.targetProject !== undefined) ? escapePSString(sel.targetProject) : null;
 
-                const isMoved = (escapedTargetProjectPath !== null);
+                const isMoved = (escapedTargetProjectPath !== null && sel.targetProject !== sel.projectPath);
 
                 if (hasEdits) {
                     scriptLines.push(`    # Processing edits for: ${sel.projectPath}\\${sel.videoName}`);
@@ -2203,7 +2207,7 @@
                     if (currentProjPathForEdit) {
                         sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${currentProjPathForEdit}')`;
                     }
-                    if (!isMoved && escapedSubfolder) {
+                    if (escapedSubfolder) {
                         sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${escapedSubfolder}')`;
                     }
                     scriptLines.push(`    \$sourceVideoPath = Join-Path -Path ${sourcePathVar} -ChildPath '${escapedVideoName}'`);
@@ -2252,9 +2256,9 @@
                     if (escapedProjectPath) {
                         targetPathConstruction = `(Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedProjectPath}')`;
                     }
-                    if (escapedSubfolder) {
-                        targetPathConstruction = `(Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedSubfolder}')`;
-                    }
+                }
+                if (escapedSubfolder) {
+                    targetPathConstruction = `(Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedSubfolder}')`;
                 }
                 targetPathConstruction = `Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedVideoName}'`;
 
@@ -2278,9 +2282,6 @@
                 const projectPathToUse = isMoved ? escapedTargetProjectPath : escapedProjectPath;
                 if (projectPathToUse) {
                     scDirPath = `(Join-Path -Path ${scDirPath} -ChildPath '${projectPathToUse}')`;
-                }
-                if (!isMoved && escapedSubfolder) {
-                    scDirPath = `(Join-Path -Path ${scDirPath} -ChildPath '${escapedSubfolder}')`;
                 }
                 scDirPath = `(Join-Path -Path ${scDirPath} -ChildPath 'sc')`;
                 
