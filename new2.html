@@ -1565,7 +1565,7 @@
             debouncedLayout();
         }
 
-        function createRowActionBar(videoName, projectPath, subfolder, rowDiv) {
+        function createRowActionBar(videoName, projectPath, subfolder, rowDiv, projectName) {
             const bar = document.createElement('div');
             bar.className = 'row-action-bar';
             
@@ -1601,7 +1601,7 @@
             const rotate = (delta) => {
                 let selection = shortcutSelections.get(key);
                 if (!selection) {
-                    selection = { videoName, projectPath, subfolder, type: '', rotation: "0" };
+                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0" };
                     shortcutSelections.set(key, selection);
                 }
                 let currentRot = parseInt(selection.rotation || "0");
@@ -1616,7 +1616,7 @@
                     selection.type = '';
                 } else {
                     if (!selection) {
-                        selection = { videoName, projectPath, subfolder, type: type, rotation: "0" };
+                        selection = { videoName, projectPath, subfolder, projectName, type: type, rotation: "0" };
                         shortcutSelections.set(key, selection);
                     } else {
                         selection.type = type;
@@ -1636,7 +1636,7 @@
             const toggleFlip = () => {
                 let selection = shortcutSelections.get(key);
                 if (!selection) {
-                    selection = { videoName, projectPath, subfolder, type: '', rotation: "0", flipped: false };
+                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0", flipped: false };
                     shortcutSelections.set(key, selection);
                 }
                 selection.flipped = !selection.flipped;
@@ -1672,7 +1672,7 @@
                 const targetPath = e.target.value;
                 let selection = shortcutSelections.get(key);
                 if (!selection) {
-                    selection = { videoName, projectPath, subfolder, type: '', rotation: "0" };
+                    selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0" };
                     shortcutSelections.set(key, selection);
                 }
                 selection.targetProject = targetPath;
@@ -1717,7 +1717,9 @@
                     selection.type = '';
                 } else {
                     if (!selection) {
-                        selection = { videoName, projectPath, subfolder, type: 'delete-sc', rotation: "0" };
+                        const row = cross.closest('.landscape-row');
+                        const projectName = row ? row.dataset.projectName : '';
+                        selection = { videoName, projectPath, subfolder, projectName, type: 'delete-sc', rotation: "0" };
                         shortcutSelections.set(key, selection);
                     } else {
                         selection.type = 'delete-sc';
@@ -2014,6 +2016,7 @@
                 '',
                 'function Manage-Shortcut {',
                 '    param([string]\$folderPath, [string]\$videoName, [string]\$targetPath, [bool]\$shouldExist)',
+                '    if (-not \$folderPath) { return }',
                 '    if (-not (Test-Path -LiteralPath \$folderPath)) {',
                 '        if (\$shouldExist) { New-Item -ItemType Directory -Path \$folderPath -Force | Out-Null }',
                 '        else { return }',
@@ -2076,9 +2079,16 @@
                     const escapedTargetProjectPath = escapePSString(sel.targetProject);
                     const escapedSubfolder = escapePSString(sel.subfolder);
                     
+                    const escapedProjectName = escapePSString(sel.projectName);
                     let sourceVideoPathVar = '\$BaseDir';
-                    if (escapedSourceProjectPath) sourceVideoPathVar = `(Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedSourceProjectPath}')`;
-                    if (escapedSubfolder) sourceVideoPathVar = `(Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedSubfolder}')`;
+                    if (escapedSourceProjectPath) {
+                        sourceVideoPathVar = `(Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedSourceProjectPath}')`;
+                    } else if (escapedProjectName) {
+                        sourceVideoPathVar = `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}')) { Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}' } else { \$BaseDir })`;
+                    }
+                    if (escapedSubfolder) {
+                        sourceVideoPathVar = `(Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedSubfolder}')`;
+                    }
                     scriptLines.push(`\$sourceVideoPath = Join-Path -Path ${sourceVideoPathVar} -ChildPath '${escapedVideoName}'`);
                     
                     let targetVideoPathVar = '\$BaseDir';
@@ -2098,7 +2108,7 @@
                     const thumbBase = sel.videoName.substring(0, sel.videoName.lastIndexOf('.'));
                     const escapedThumbBase = escapePSString(thumbBase);
                     
-                    scriptLines.push(`\$sourceProjectPath = ${escapedSourceProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedSourceProjectPath}'` : '\$BaseDir'}`);
+                    scriptLines.push(`\$sourceProjectPath = ${escapedSourceProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedSourceProjectPath}'` : (escapedProjectName ? `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}')) { Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}' } else { \$BaseDir })` : '\$BaseDir')}`);
                     scriptLines.push(`\$targetProjectPath = ${escapedTargetProjectPath ? `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedTargetProjectPath}'` : '\$BaseDir'}`);
                     if (escapedSubfolder) {
                         scriptLines.push(`\$targetProjectPath = Join-Path -Path \$targetProjectPath -ChildPath '${escapedSubfolder}'`);
@@ -2155,14 +2165,14 @@
             }
 
             let needsRootSc = false;
-            const subfolderProjects = new Set();
+            const subfolderProjects = new Map(); // path -> name
             selectionsToProcess.forEach(sel => {
                 const selectionType = sel.type || 'root-sc';
                 if (selectionType === 'root-sc' || selectionType === 'both-sc') {
                     needsRootSc = true;
                 }
                 if (selectionType === 'subfolder-sc' || selectionType === 'both-sc') {
-                    subfolderProjects.add(sel.projectPath || "");
+                    subfolderProjects.set(sel.projectPath || "", sel.projectName || "");
                 }
             });
 
@@ -2172,10 +2182,13 @@
                 scriptLines.push('');
             }
             
-            subfolderProjects.forEach(projectPath => {
+            subfolderProjects.forEach((projectName, projectPath) => {
                 const escapedProjectPath = escapePSString(projectPath);
+                const escapedProjectName = escapePSString(projectName);
                 if (escapedProjectPath) {
                     scriptLines.push(`\$subfolderScPath = Join-Path -Path (Join-Path -Path \"$BaseDir\" -ChildPath '${escapedProjectPath}') -ChildPath 'sc'`);
+                } else if (escapedProjectName) {
+                    scriptLines.push(`\$subfolderScPath = Join-Path -Path (if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}')) { Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}' } else { \$BaseDir }) -ChildPath 'sc'`);
                 } else {
                     scriptLines.push('\$subfolderScPath = Join-Path -Path \"$BaseDir\" -ChildPath \'sc\'');
                 }
@@ -2190,7 +2203,7 @@
                     scriptLines.push('if (-not (Test-Path -Path \"$subfolderScPath\")) { New-Item -ItemType Directory -Path \"$subfolderScPath\" -Force | Out-Null }');
                 }
             });
-            if (subfolderProjects.size > 0) {
+            if (subfolderProjects.size > 0 || targetProjects.size > 0) {
                 scriptLines.push('');
             }
 
@@ -2209,6 +2222,7 @@
 
                 const escapedVideoName = escapePSString(sel.videoName);
                 const escapedProjectPath = escapePSString(sel.projectPath);
+                const escapedProjectName = escapePSString(sel.projectName);
                 const escapedSubfolder = escapePSString(sel.subfolder);
                 const escapedTargetProjectPath = (sel.targetProject !== undefined) ? escapePSString(sel.targetProject) : null;
 
@@ -2218,9 +2232,15 @@
                     scriptLines.push(`    # Processing edits for: ${sel.projectPath}\\${sel.videoName}`);
                     let sourcePathVar = '\$BaseDir';
                     const currentProjPathForEdit = isMoved ? escapedTargetProjectPath : escapedProjectPath;
+                    const currentProjNameForEdit = isMoved ? escapedTargetProjectPath : escapedProjectName;
                     if (currentProjPathForEdit) {
                         sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${currentProjPathForEdit}')`;
+                    } else if (currentProjNameForEdit) {
+                        // Fallback: If projectPath is empty, check if a subfolder with projectName exists in BaseDir
+                        scriptLines.push(`    if (-not (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${currentProjNameForEdit}'))) { Write-Host "WARNING: Project folder '${currentProjNameForEdit}' not found in \$BaseDir. Attempting to use root." -ForegroundColor Yellow }`);
+                        sourcePathVar = `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${currentProjNameForEdit}')) { Join-Path -Path \$BaseDir -ChildPath '${currentProjNameForEdit}' } else { \$BaseDir })`;
                     }
+
                     if (escapedSubfolder) {
                         sourcePathVar = `(Join-Path -Path ${sourcePathVar} -ChildPath '${escapedSubfolder}')`;
                     }
@@ -2255,7 +2275,8 @@
                     // Clear rotation metadata for this file since it's now burnt-in
                     const projPath = sel.projectPath;
                     const escapedProjPath = escapePSString(projPath);
-                    const projPathVar = escapedProjPath ? `(Join-Path -Path \"$BaseDir\" -ChildPath '${escapedProjPath}')` : '\$BaseDir';
+                    const escapedProjName = escapePSString(sel.projectName);
+                    const projPathVar = escapedProjPath ? `(Join-Path -Path \"$BaseDir\" -ChildPath '${escapedProjPath}')` : (escapedProjName ? `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${escapedProjName}')) { Join-Path -Path \$BaseDir -ChildPath '${escapedProjName}' } else { \$BaseDir })` : '\$BaseDir');
                     const rotFileVar = `(Join-Path -Path ${projPathVar} -ChildPath 'rotation_data.txt')`;
                     scriptLines.push(`        Update-RotationData -filePath ${rotFileVar} -toAdd @{} -toRemove @('${escapedVideoName}')`);
                     scriptLines.push(`    }`);
@@ -2269,6 +2290,8 @@
                 } else {
                     if (escapedProjectPath) {
                         targetPathConstruction = `(Join-Path -Path ${targetPathConstruction} -ChildPath '${escapedProjectPath}')`;
+                    } else if (escapedProjectName) {
+                        targetPathConstruction = `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}')) { Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}' } else { \$BaseDir })`;
                     }
                 }
                 if (escapedSubfolder) {
@@ -2294,8 +2317,11 @@
                 // Subfolder location
                 let scDirPath = '\$BaseDir';
                 const projectPathToUse = isMoved ? escapedTargetProjectPath : escapedProjectPath;
+                const projectNameToUse = isMoved ? escapedTargetProjectPath : escapedProjectName;
                 if (projectPathToUse) {
                     scDirPath = `(Join-Path -Path ${scDirPath} -ChildPath '${projectPathToUse}')`;
+                } else if (projectNameToUse) {
+                    scDirPath = `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${projectNameToUse}')) { Join-Path -Path \$BaseDir -ChildPath '${projectNameToUse}' } else { \$BaseDir })`;
                 }
                 scDirPath = `(Join-Path -Path ${scDirPath} -ChildPath 'sc')`;
                 
@@ -2313,8 +2339,13 @@
                     const escapedProjectPath = escapePSString(sel.projectPath);
                     const escapedSubfolder = escapePSString(sel.subfolder);
                     
+                    const escapedProjectName = escapePSString(sel.projectName);
                     let videoPathVar = '\$BaseDir';
-                    if (escapedProjectPath) videoPathVar = `(Join-Path -Path ${videoPathVar} -ChildPath '${escapedProjectPath}')`;
+                    if (escapedProjectPath) {
+                        videoPathVar = `(Join-Path -Path ${videoPathVar} -ChildPath '${escapedProjectPath}')`;
+                    } else if (escapedProjectName) {
+                        videoPathVar = `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}')) { Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}' } else { \$BaseDir })`;
+                    }
                     if (escapedSubfolder) videoPathVar = `(Join-Path -Path ${videoPathVar} -ChildPath '${escapedSubfolder}')`;
                     scriptLines.push(`\$videoPath = Join-Path -Path ${videoPathVar} -ChildPath '${escapedVideoName}'`);
                     
@@ -2329,6 +2360,8 @@
                     let projectPathVar = '\$BaseDir';
                     if (escapedProjectPath) {
                         projectPathVar = `Join-Path -Path \"$BaseDir\" -ChildPath '${escapedProjectPath}'`;
+                    } else if (escapedProjectName) {
+                        projectPathVar = `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}')) { Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}' } else { \$BaseDir })`;
                     }
                     scriptLines.push(`\$projectPath = ${projectPathVar}`);
                     scriptLines.push(`\$thumbDirs = @('Thumbnails', 'Edit Thumbnails')`);
@@ -2356,10 +2389,13 @@
                 const initiallyInSubfolder = initial.type === 'subfolder-sc' || initial.type === 'both-sc';
                 const currentlyInSubfolder = current && (current.type === 'subfolder-sc' || current.type === 'both-sc');
                 if (initiallyInSubfolder && !currentlyInSubfolder) {
+                    const escapedProjectName = escapePSString(initial.projectName || '');
                     let subPath = '\$BaseDir';
-                    if (escapedProjectPath) subPath = `(Join-Path -Path ${subPath} -ChildPath '${escapedProjectPath}')`;
-                    const escapedSubfolder = escapePSString(initial.subfolder || '');
-                    if (escapedSubfolder) subPath = `(Join-Path -Path ${subPath} -ChildPath '${escapedSubfolder}')`;
+                    if (escapedProjectPath) {
+                        subPath = `(Join-Path -Path ${subPath} -ChildPath '${escapedProjectPath}')`;
+                    } else if (escapedProjectName) {
+                        subPath = `(if (Test-Path -Path (Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}')) { Join-Path -Path \$BaseDir -ChildPath '${escapedProjectName}' } else { \$BaseDir })`;
+                    }
                     subPath = `(Join-Path -Path ${subPath} -ChildPath 'sc')`;
                     
                     const fullScPath = `Join-Path -Path ${subPath} -ChildPath ('${escapedVideoName}' + '.lnk')`;
@@ -3069,6 +3105,7 @@
                         rowDiv.className = 'landscape-row';
                         rowDiv.dataset.videoName = videoName;
                         rowDiv.dataset.projectPath = project.path;
+                        rowDiv.dataset.projectName = project.name;
 
                         projectRows.push({ rowDiv, videoFile, files, initialShortcutType: '', hasProjectSc, hasRootSc, rootScEntry });
                     }
@@ -3098,7 +3135,7 @@
                     for (const rowData of projectRows) {
                         const { rowDiv, videoFile, files, hasProjectSc, hasRootSc, rootScEntry } = rowData;
 
-                        rowDiv.appendChild(createRowActionBar(videoFile.name, project.path, videoFile.subfolder, rowDiv));
+                        rowDiv.appendChild(createRowActionBar(videoFile.name, project.path, videoFile.subfolder, rowDiv, project.name));
                         const dateInfo = document.createElement('div');
                         dateInfo.className = 'date-info';
                         dateInfo.textContent = `Created: ${new Date(videoFile.lastModified).toLocaleString()}`;
@@ -3147,10 +3184,14 @@
                             const key = project.path + '|' + videoFile.name;
                             const selectionData = { 
                                 videoName: videoFile.name, projectPath: project.path, subfolder: videoFile.subfolder,
+                                projectName: project.name,
                                 type: initialShortcutType || '', rotation: rotation, flipped: flipped
                             };
                             shortcutSelections.set(key, selectionData);
-                            initialShortcutSelections.set(key, { type: initialShortcutType, rotation: rotation, flipped: flipped, subfolder: videoFile.subfolder });
+                            initialShortcutSelections.set(key, {
+                                type: initialShortcutType, rotation: rotation, flipped: flipped,
+                                subfolder: videoFile.subfolder, projectName: project.name
+                            });
                         }
 
                         canvasElements.push(rowDiv);
@@ -3304,6 +3345,7 @@
                             rowDiv.className = 'landscape-row';
                             rowDiv.dataset.videoName = videoBaseName;
                             rowDiv.dataset.projectPath = subfolderName;
+                            rowDiv.dataset.projectName = subfolderName;
 
                             const dateInfo = document.createElement('div');
                             dateInfo.className = 'date-info';
@@ -3320,15 +3362,19 @@
                                     shortcutSelections.set(key, {
                                         videoName: videoBaseName,
                                         projectPath: subfolderName,
+                                        projectName: subfolderName,
                                         type: 'subfolder-sc', // default for sc-new
                                         rotation: rotation,
                                         flipped: flipped
                                     });
-                                    initialShortcutSelections.set(key, { type: 'subfolder-sc', rotation: rotation, flipped: flipped, subfolder: '' });
+                                    initialShortcutSelections.set(key, {
+                                        type: 'subfolder-sc', rotation: rotation, flipped: flipped,
+                                        subfolder: '', projectName: subfolderName
+                                    });
                                 }
                             }
 
-                            rowDiv.appendChild(createRowActionBar(videoBaseName, subfolderName, '', rowDiv));
+                            rowDiv.appendChild(createRowActionBar(videoBaseName, subfolderName, '', rowDiv, subfolderName));
                             const thumbnailsContainer = document.createElement('div');
                             thumbnailsContainer.className = 'thumbnails-container';
                             rowDiv.appendChild(thumbnailsContainer);
@@ -3561,8 +3607,9 @@
                     const rowDiv = document.createElement('div');
                     rowDiv.className = 'landscape-row';
                     rowDiv.dataset.projectPath = project.path;
+                    rowDiv.dataset.projectName = project.name;
 
-                    rowDiv.appendChild(createRowActionBar('Playlist Item', project.path, candidateVideos[currentIndex].subfolder, rowDiv));
+                    rowDiv.appendChild(createRowActionBar('Playlist Item', project.path, candidateVideos[currentIndex].subfolder, rowDiv, project.name));
 
                     const navContainer = document.createElement('div');
                     navContainer.className = 'playlist-nav-container';
