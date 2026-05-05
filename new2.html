@@ -1275,11 +1275,7 @@
             });
 
             sizeSelector.addEventListener('change', () => layoutLandscapeThumbnails());
-            window.addEventListener('resize', () => {
-                if (sizeSelector.value === 'auto') {
-                    layoutLandscapeThumbnails();
-                }
-            });
+            window.addEventListener('resize', debouncedLayout);
             
             sortSelector.addEventListener('change', (e) => {
                 if(currentDirHandle) {
@@ -1799,33 +1795,30 @@
             const elements = document.querySelectorAll('.landscape-row, .project-header, hr');
             const showNumbers = showNumbersCheckbox.checked;
             const paddingLeft = showNumbers ? 40 : 20;
-            const containerWidth = thumbnailContainer.clientWidth;
+            const containerWidth = thumbnailContainer.getBoundingClientRect().width || window.innerWidth;
             const isAuto = sizeSelector.value === 'auto';
             let globalScale = isAuto ? 1.0 : parseFloat(sizeSelector.value);
 
-            // In Auto mode, we calculate a scale that fits 10 thumbnails in the first row if possible
             if (isAuto) {
-                // Find the first landscape-row with valid thumbnails to use as reference
-                const firstRow = document.querySelector('.landscape-row:has(.thumbnail[data-original-width])');
-                if (firstRow) {
-                    const firstThumb = firstRow.querySelector('.thumbnail[data-original-width]');
+                const firstThumb = document.querySelector('.thumbnail[data-original-width]');
+                if (firstThumb) {
                     const ow = parseFloat(firstThumb.dataset.originalWidth);
                     const oh = parseFloat(firstThumb.dataset.originalHeight);
                     const isRot90 = firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270');
                     const refW = isRot90 ? oh : ow;
 
-                    // Available width for thumbnails (accounting for gaps and padding)
-                    // thumbnails have margin-right: 10px, thumbnails-container has padding: 10px 20px
+                    // availableW = containerWidth - leftOffset - rightPadding
+                    // paddingLeft (20/40) + thumbnails-container padding-left (20) + padding-right (20)
                     const availableW = containerWidth - paddingLeft - 40;
 
-                    // We want to fit 10 thumbnails. totalWidth = 10 * scaledW + 9 * 10 (gaps)
-                    // scaledW = (availableW - 90) / 10
-                    let targetScaledW = (availableW - 90) / 10;
+                    // How many 210px items can we fit? (including 10px margin)
+                    let numToFit = Math.floor((availableW + 10) / (210 + 10));
+                    if (numToFit < 1) numToFit = 1;
+                    if (numToFit > 10) numToFit = 10; // Cap at 10 items as requested for reference row
 
-                    // Min width 210px
-                    if (targetScaledW < 210) {
-                        targetScaledW = 210;
-                    }
+                    // What width makes those items fill the space?
+                    let targetScaledW = (availableW - ((numToFit - 1) * 10)) / numToFit;
+                    if (targetScaledW < 210) targetScaledW = 210;
 
                     globalScale = targetScaledW / refW;
                 }
@@ -1942,8 +1935,6 @@
                 '\$BaseDir = [System.IO.Path]::GetFullPath(\$BaseDir)',
                 '\$wshell = New-Object -ComObject WScript.Shell',
                 '\$newShortcuts = @()',
-                '\$desktopFolder = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)',
-                '\$startMenuFolder = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)',
                 '',
                 'function Resolve-PSPath {',
                 '    param([string]\$base, [string]\$relPath, [string]\$name, [string]\$sub)',
@@ -2094,47 +2085,52 @@
                 '    }',
                 '    \$baseName = [System.IO.Path]::GetFileNameWithoutExtension(\$videoName)',
                 '    \$extensions = @(".lnk", ".ink")',
-                '    \$variants = @()',
-                '    foreach (\$ext in \$extensions) {',
-                '        \$variants += Join-Path -Path \$folderPath -ChildPath (\$videoName + \$ext)',
-                '        \$variants += Join-Path -Path \$folderPath -ChildPath (\$baseName + \$ext)',
-                '        \$variants += Join-Path -Path \$folderPath -ChildPath (\$videoName + " - Shortcut" + \$ext)',
-                '        \$variants += Join-Path -Path \$folderPath -ChildPath (\$baseName + " - Shortcut" + \$ext)',
-                '    }',
-                '    \$existing = \$variants | Where-Object { Test-Path -LiteralPath \$_ }',
+                '    \$pattern = [regex]::Escape(\$baseName) + ".*" + "(\\.lnk|\\.ink)\$"',
+                '    \$existing = Get-ChildItem -LiteralPath \$folderPath -File | Where-Object { \$_.Name -match \$pattern }',
+                '    ',
                 '    if (-not \$shouldExist) {',
-                '        foreach (\$path in \$existing) {',
-                '            Remove-Item -LiteralPath \$path -Force',
-                '            Write-Host "Removed obsolete shortcut: \$path" -ForegroundColor Yellow',
+                '        foreach (\$file in \$existing) {',
+                '            Remove-Item -LiteralPath \$file.FullName -Force',
+                '            Write-Host "Removed obsolete shortcut: \$(\$file.Name)" -ForegroundColor Yellow',
                 '        }',
                 '        return',
                 '    }',
+                '    ',
                 '    \$primaryPath = (Join-Path -Path \$folderPath -ChildPath (\$videoName + ".lnk"))',
-                '    if (\$existing.Count -gt 0) {',
-                '        foreach (\$path in \$existing) {',
-                '            try {',
-                '                \$sc = \$wshell.CreateShortcut(\$path)',
-                '                if ([System.IO.Path]::GetFullPath(\$sc.TargetPath).TrimEnd(\"\\\") -eq \$targetPath.TrimEnd(\"\\\")) {',
-                '                    if (\$path -ne \$primaryPath) {',
-                '                        Move-Item -LiteralPath \$path -Destination \$primaryPath -Force',
+                '    \$foundCorrect = \$false',
+                '    foreach (\$file in \$existing) {',
+                '        try {',
+                '            \$sc = \$wshell.CreateShortcut(\$file.FullName)',
+                '            if ([System.IO.Path]::GetFullPath(\$sc.TargetPath).TrimEnd(\"\\\") -eq \$targetPath.TrimEnd(\"\\\")) {',
+                '                if (-not \$foundCorrect) {',
+                '                    if (\$file.FullName -ne \$primaryPath) {',
+                '                        if (Test-Path -LiteralPath \$primaryPath) { Remove-Item -LiteralPath \$primaryPath -Force }',
+                '                        Move-Item -LiteralPath \$file.FullName -Destination \$primaryPath -Force',
                 '                        Write-Host "Standardized shortcut name: \$primaryPath" -ForegroundColor Gray',
                 '                    }',
-                '                    return',
+                '                    \$foundCorrect = \$true',
+                '                } else {',
+                '                    Remove-Item -LiteralPath \$file.FullName -Force',
+                '                    Write-Host "Removed duplicate shortcut: \$(\$file.FullName)" -ForegroundColor Gray',
                 '                }',
-                '                Remove-Item -LiteralPath \$path -Force',
-                '                Write-Host "Removed incorrect shortcut: \$path" -ForegroundColor Gray',
-                '            } catch {',
-                '                Remove-Item -LiteralPath \$path -Force',
+                '            } else {',
+                '                Remove-Item -LiteralPath \$file.FullName -Force',
+                '                Write-Host "Removed incorrect shortcut: \$(\$file.FullName)" -ForegroundColor Gray',
                 '            }',
+                '        } catch {',
+                '            Remove-Item -LiteralPath \$file.FullName -Force',
                 '        }',
                 '    }',
-                '    try {',
-                '        \$sc = \$wshell.CreateShortcut(\$primaryPath)',
-                '        \$sc.TargetPath = \$targetPath',
-                '        \$sc.Save()',
-                '        Write-Host "Created shortcut: \$primaryPath" -ForegroundColor Green',
-                '    } catch {',
-                '        Write-Host "FAILED to create shortcut: \$primaryPath" -ForegroundColor Red',
+                '    if (-not \$foundCorrect) {',
+                '        try {',
+                '            if (Test-Path -LiteralPath \$primaryPath) { Remove-Item -LiteralPath \$primaryPath -Force }',
+                '            \$sc = \$wshell.CreateShortcut(\$primaryPath)',
+                '            \$sc.TargetPath = \$targetPath',
+                '            \$sc.Save()',
+                '            Write-Host "Created shortcut: \$primaryPath" -ForegroundColor Green',
+                '        } catch {',
+                '            Write-Host "FAILED to create shortcut: \$primaryPath" -ForegroundColor Red',
+                '        }',
                 '    }',
                 '}',
                 ''
@@ -2328,12 +2324,6 @@
                 const wantRoot = (selectionType === 'root-sc' || selectionType === 'both-sc');
                 const wantSub = (selectionType === 'subfolder-sc' || selectionType === 'both-sc');
 
-                // Desktop
-                scriptLines.push(`    Manage-Shortcut -folderPath \$desktopFolder -videoName '${escapedVideoName}' -targetPath \$targetPath -shouldExist ${wantRoot ? '$true' : '$false'}`);
-
-                // Start Menu
-                scriptLines.push(`    Manage-Shortcut -folderPath \$startMenuFolder -videoName '${escapedVideoName}' -targetPath \$targetPath -shouldExist ${wantRoot ? '$true' : '$false'}`);
-
                 // Root location
                 scriptLines.push(`    Manage-Shortcut -folderPath \$rootScFolder -videoName '${escapedVideoName}' -targetPath \$targetPath -shouldExist ${wantRoot ? '$true' : '$false'}`);
 
@@ -2410,11 +2400,6 @@
                     const fullScPath = `(Join-Path -Path ${rootScFolder} -ChildPath ('${escapedVideoName}' + '.lnk'))`;
                     deletions.push(`if (Test-Path -LiteralPath (${fullScPath})) { Remove-Item -LiteralPath (${fullScPath}); Write-Host "Deleted root shortcut: ${escapedVideoName}" }`);
 
-                    const desktopScPath = `Join-Path -Path \$desktopFolder -ChildPath ('${escapedVideoName}' + '.lnk')`;
-                    deletions.push(`if (Test-Path -LiteralPath (${desktopScPath})) { Remove-Item -LiteralPath (${desktopScPath}); Write-Host "Deleted desktop shortcut: ${escapedVideoName}" }`);
-
-                    const startMenuScPath = `Join-Path -Path \$startMenuFolder -ChildPath ('${escapedVideoName}' + '.lnk')`;
-                    deletions.push(`if (Test-Path -LiteralPath (${startMenuScPath})) { Remove-Item -LiteralPath (${startMenuScPath}); Write-Host "Deleted start menu shortcut: ${escapedVideoName}" }`);
                 }
             });
 
