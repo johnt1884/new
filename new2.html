@@ -574,12 +574,13 @@
                         </div>
                     </div>
                     <select id="size-selector">
+                        <option value="auto" selected>Auto Fit</option>
                         <option value="0.2">20%</option>
                         <option value="0.3">30%</option>
                         <option value="0.4">40%</option>
                         <option value="0.5">50%</option>
                         <option value="0.6">60%</option>
-                        <option value="0.7" selected>70%</option>
+                        <option value="0.7">70%</option>
                         <option value="0.8">80%</option>
                         <option value="0.9">90%</option>
                         <option value="1">100%</option>
@@ -1075,9 +1076,6 @@
                 }
                 selection.cuts = JSON.parse(JSON.stringify(editorCurrentCuts));
                 selection.markers = JSON.parse(JSON.stringify(editorMarkers));
-                if (editorMarkers.length > 0) {
-                    selection.rotation = editorMarkers[editorMarkers.length - 1].rotation.toString();
-                }
                 selection.fps = editorEstimatedFPS;
 
                 // Close editor
@@ -1277,6 +1275,11 @@
             });
 
             sizeSelector.addEventListener('change', () => layoutLandscapeThumbnails());
+            window.addEventListener('resize', () => {
+                if (sizeSelector.value === 'auto') {
+                    layoutLandscapeThumbnails();
+                }
+            });
             
             sortSelector.addEventListener('change', (e) => {
                 if(currentDirHandle) {
@@ -1793,24 +1796,52 @@
         }
 
         function layoutLandscapeThumbnails() {
-            const scale = parseFloat(sizeSelector.value);
             const elements = document.querySelectorAll('.landscape-row, .project-header, hr');
             const showNumbers = showNumbersCheckbox.checked;
             const paddingLeft = showNumbers ? 40 : 20;
+            const containerWidth = thumbnailContainer.clientWidth;
+            const isAuto = sizeSelector.value === 'auto';
+            let globalScale = isAuto ? 1.0 : parseFloat(sizeSelector.value);
+
+            // In Auto mode, we calculate a scale that fits 10 thumbnails in the first row if possible
+            if (isAuto) {
+                // Find the first landscape-row with valid thumbnails to use as reference
+                const firstRow = document.querySelector('.landscape-row:has(.thumbnail[data-original-width])');
+                if (firstRow) {
+                    const firstThumb = firstRow.querySelector('.thumbnail[data-original-width]');
+                    const ow = parseFloat(firstThumb.dataset.originalWidth);
+                    const oh = parseFloat(firstThumb.dataset.originalHeight);
+                    const isRot90 = firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270');
+                    const refW = isRot90 ? oh : ow;
+
+                    // Available width for thumbnails (accounting for gaps and padding)
+                    // thumbnails have margin-right: 10px, thumbnails-container has padding: 10px 20px
+                    const availableW = containerWidth - paddingLeft - 40;
+
+                    // We want to fit 10 thumbnails. totalWidth = 10 * scaledW + 9 * 10 (gaps)
+                    // scaledW = (availableW - 90) / 10
+                    let targetScaledW = (availableW - 90) / 10;
+
+                    // Min width 210px
+                    if (targetScaledW < 210) {
+                        targetScaledW = 210;
+                    }
+
+                    globalScale = targetScaledW / refW;
+                }
+            }
 
             elements.forEach(element => {
                 if (element.classList.contains('landscape-row')) {
                     const wrappers = element.querySelectorAll('.thumbnail-wrapper');
-                    let sampleOriginalHeight = 180;
                     wrappers.forEach(wrapper => {
                         const thumb = wrapper.querySelector('.thumbnail');
                         if (!thumb.dataset.originalWidth) return;
                         
                         const originalWidth = parseFloat(thumb.dataset.originalWidth);
                         const originalHeight = parseFloat(thumb.dataset.originalHeight);
-                        sampleOriginalHeight = originalHeight;
-                        const scaledWidth = originalWidth * scale;
-                        const scaledHeight = originalHeight * scale;
+                        const scaledWidth = originalWidth * globalScale;
+                        const scaledHeight = originalHeight * globalScale;
                         
                         const isRotated90 = thumb.classList.contains('rotate-90') || thumb.classList.contains('rotate-270');
                         
@@ -1826,11 +1857,6 @@
                         thumb.style.height = scaledHeight + 'px';
                     });
 
-                    const bar = element.querySelector('.row-action-bar');
-                    if (bar) {
-                        const targetWidth = paddingLeft + (6 * (sampleOriginalHeight * scale)) + (5 * 10) + 20;
-                        bar.style.maxWidth = targetWidth + 'px';
-                    }
                 }
             });
             updateRowNumbers();
