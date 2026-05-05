@@ -573,18 +573,10 @@
                             <button id="revert-defaults-btn" style="width: 100%; text-align: center; border-top: 1px solid #ccc; font-weight: bold;">Revert to Default Colors</button>
                         </div>
                     </div>
-                    <select id="size-selector">
-                        <option value="auto" selected>Auto Fit</option>
-                        <option value="0.2">20%</option>
-                        <option value="0.3">30%</option>
-                        <option value="0.4">40%</option>
-                        <option value="0.5">50%</option>
-                        <option value="0.6">60%</option>
-                        <option value="0.7">70%</option>
-                        <option value="0.8">80%</option>
-                        <option value="0.9">90%</option>
-                        <option value="1">100%</option>
-                    </select>
+                    <div style="display:flex; align-items:center; gap:5px; color:white; font-size:12px;">
+                        <input type="number" id="custom-size-input" value="70" min="10" max="100" style="width: 45px; background:#333; color:white; border:1px solid #555; border-radius:3px;">
+                        <span>%</span>
+                    </div>
                     <select id="sort-selector">
                         <option value="" disabled selected hidden>Sort</option>
                         <option value="name-asc">Name (A-Z)</option>
@@ -690,7 +682,7 @@
         const batchScriptTextArea = document.getElementById('batch-script');
         const copyScriptBtn = document.getElementById('copy-script-btn');
         const downloadScriptLink = document.getElementById('download-script-link');
-        const sizeSelector = document.getElementById('size-selector');
+        const customSizeInput = document.getElementById('custom-size-input');
         const sortSelector = document.getElementById('sort-selector');
         const loadButton = document.getElementById('load-directory-btn');
         const loadScButton = document.getElementById('load-sc-btn');
@@ -775,6 +767,23 @@
         let editorMediaFrameCount = 0;
         let editorScrubbingMouseDown = false;
         let editorCurrentAppliedRotation = 0;
+
+        function saveThumbnailSize() {
+            if (currentDirHandle) {
+                localStorage.setItem(`thumb-size-${currentDirHandle.name}`, customSizeInput.value);
+            }
+        }
+
+        function loadThumbnailSize() {
+            if (currentDirHandle) {
+                const saved = localStorage.getItem(`thumb-size-${currentDirHandle.name}`);
+                if (saved) {
+                    customSizeInput.value = saved;
+                } else {
+                    customSizeInput.value = 70;
+                }
+            }
+        }
 
         const mainContainer = document.querySelector('.main-container');
         const showDatesCheckbox = document.getElementById('show-dates-checkbox');
@@ -1181,6 +1190,7 @@
                 try {
                     const dirHandle = await window.showDirectoryPicker();
                     currentDirHandle = dirHandle;
+                    loadThumbnailSize();
                     g_rootHandle = null;
                     currentMode = 'directory';
                     setVisibilityForMode(currentMode);
@@ -1194,6 +1204,7 @@
                 try {
                     const dirHandle = await window.showDirectoryPicker();
                     currentDirHandle = dirHandle;
+                    loadThumbnailSize();
                     g_rootHandle = null;
                     currentMode = 'sc';
                     setVisibilityForMode(currentMode);
@@ -1229,6 +1240,7 @@
 
                     const dirHandle = await window.showDirectoryPicker();
                     currentDirHandle = dirHandle;
+                    loadThumbnailSize();
                     currentMode = 'update-playlist-root';
                     setSelectionType('playlist-sc');
                     setVisibilityForMode(currentMode);
@@ -1245,6 +1257,7 @@
                 try {
                     const dirHandle = await window.showDirectoryPicker();
                     currentDirHandle = dirHandle;
+                    loadThumbnailSize();
                     g_rootHandle = null;
                     currentMode = 'latest-videos';
                     setVisibilityForMode(currentMode);
@@ -1274,7 +1287,10 @@
                 scriptModal.style.display = 'block';
             });
 
-            sizeSelector.addEventListener('change', () => layoutLandscapeThumbnails());
+            customSizeInput.addEventListener('input', () => {
+                saveThumbnailSize();
+                debouncedLayout();
+            });
             window.addEventListener('resize', debouncedLayout);
             
             sortSelector.addEventListener('change', (e) => {
@@ -1293,6 +1309,7 @@
                 try {
                     const dirHandle = await window.showDirectoryPicker();
                     currentDirHandle = dirHandle;
+                    loadThumbnailSize();
                     g_rootHandle = null;
                     currentMode = 'root-sc';
                     setVisibilityForMode(currentMode);
@@ -1308,6 +1325,7 @@
                 try {
                     const dirHandle = await window.showDirectoryPicker();
                     currentDirHandle = dirHandle;
+                    loadThumbnailSize();
                     currentMode = 'playlist';
                     setSelectionType('both-sc');
                     setVisibilityForMode(currentMode);
@@ -1323,6 +1341,7 @@
                 try {
                     const dirHandle = await window.showDirectoryPicker();
                     currentDirHandle = dirHandle;
+                    loadThumbnailSize();
                     currentMode = 'playlist-root';
                     setSelectionType('playlist-sc');
                     setVisibilityForMode(currentMode);
@@ -1500,8 +1519,7 @@
             }
 
             populateCanvasDropdown();
-            layoutLandscapeThumbnails(); // Re-layout after switching canvas
-            updateRowNumbers(); // Ensure numbers are shown if enabled
+            debouncedLayout(); // Re-layout after switching canvas
         }
 
         function populateCanvasDropdown() {
@@ -1794,36 +1812,9 @@
         function layoutLandscapeThumbnails() {
             const elements = document.querySelectorAll('.landscape-row, .project-header, hr');
             const showNumbers = showNumbersCheckbox.checked;
-            const paddingLeft = showNumbers ? 40 : 20;
             const containerWidth = window.innerWidth;
-            const isAuto = sizeSelector.value === 'auto';
-            let globalScale = isAuto ? 1.0 : parseFloat(sizeSelector.value);
 
-            if (isAuto) {
-                const firstThumb = document.querySelector('.thumbnail[data-original-width]');
-                const ow = firstThumb ? parseFloat(firstThumb.dataset.originalWidth) : 320;
-                const oh = firstThumb ? parseFloat(firstThumb.dataset.originalHeight) : 180;
-                const isRot90 = firstThumb ? (firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270')) : false;
-                const refW = isRot90 ? oh : ow;
-
-                // Available width for content inside thumbnails-container
-                // Thumbnails are inside landscape-row which is 100% width.
-                // thumbnails-container has padding: 10px 20px
-                const availableW = containerWidth - 40 - 10;
-
-                // Target: 10 items per row, but min 210px each.
-                let numToFit = 10;
-                let targetScaledW = (availableW - (9 * 10)) / 10;
-
-                if (targetScaledW < 210) {
-                    // Fit as many as possible at 210px
-                    numToFit = Math.floor((availableW + 10) / (210 + 10));
-                    if (numToFit < 1) numToFit = 1;
-                    targetScaledW = (availableW - ((numToFit - 1) * 10)) / numToFit;
-                }
-
-                globalScale = targetScaledW / refW;
-            }
+            let globalScale = (parseInt(customSizeInput.value) || 70) / 100;
 
             elements.forEach(element => {
                 if (element.classList.contains('landscape-row')) {
@@ -1842,13 +1833,18 @@
                         if (isRotated90) {
                             wrapper.style.width = scaledHeight + 'px';
                             wrapper.style.height = scaledWidth + 'px';
+                            thumb.style.width = scaledWidth + 'px';
+                            thumb.style.height = scaledHeight + 'px';
+                            thumb.style.marginTop = -(scaledHeight / 2) + 'px';
+                            thumb.style.marginLeft = -(scaledWidth / 2) + 'px';
                         } else {
                             wrapper.style.width = scaledWidth + 'px';
                             wrapper.style.height = scaledHeight + 'px';
+                            thumb.style.width = scaledWidth + 'px';
+                            thumb.style.height = scaledHeight + 'px';
+                            thumb.style.marginTop = '';
+                            thumb.style.marginLeft = '';
                         }
-                        
-                        thumb.style.width = scaledWidth + 'px';
-                        thumb.style.height = scaledHeight + 'px';
                     });
 
                 }
@@ -3677,7 +3673,7 @@
                             img.onload = () => {
                                 img.dataset.originalWidth = img.width;
                                 img.dataset.originalHeight = img.height;
-                                layoutLandscapeThumbnails();
+                                debouncedLayout();
                             };
 
                             img.addEventListener('click', (e) => {
