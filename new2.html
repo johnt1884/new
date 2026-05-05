@@ -1795,33 +1795,34 @@
             const elements = document.querySelectorAll('.landscape-row, .project-header, hr');
             const showNumbers = showNumbersCheckbox.checked;
             const paddingLeft = showNumbers ? 40 : 20;
-            const containerWidth = thumbnailContainer.getBoundingClientRect().width || window.innerWidth;
+            const containerWidth = window.innerWidth;
             const isAuto = sizeSelector.value === 'auto';
             let globalScale = isAuto ? 1.0 : parseFloat(sizeSelector.value);
 
             if (isAuto) {
                 const firstThumb = document.querySelector('.thumbnail[data-original-width]');
-                if (firstThumb) {
-                    const ow = parseFloat(firstThumb.dataset.originalWidth);
-                    const oh = parseFloat(firstThumb.dataset.originalHeight);
-                    const isRot90 = firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270');
-                    const refW = isRot90 ? oh : ow;
+                const ow = firstThumb ? parseFloat(firstThumb.dataset.originalWidth) : 320;
+                const oh = firstThumb ? parseFloat(firstThumb.dataset.originalHeight) : 180;
+                const isRot90 = firstThumb ? (firstThumb.classList.contains('rotate-90') || firstThumb.classList.contains('rotate-270')) : false;
+                const refW = isRot90 ? oh : ow;
 
-                    // availableW = containerWidth - leftOffset - rightPadding
-                    // paddingLeft (20/40) + thumbnails-container padding-left (20) + padding-right (20)
-                    const availableW = containerWidth - paddingLeft - 40;
+                // Available width for content inside thumbnails-container
+                // Thumbnails are inside landscape-row which is 100% width.
+                // thumbnails-container has padding: 10px 20px
+                const availableW = containerWidth - 40 - 10;
 
-                    // How many 210px items can we fit? (including 10px margin)
-                    let numToFit = Math.floor((availableW + 10) / (210 + 10));
+                // Target: 10 items per row, but min 210px each.
+                let numToFit = 10;
+                let targetScaledW = (availableW - (9 * 10)) / 10;
+
+                if (targetScaledW < 210) {
+                    // Fit as many as possible at 210px
+                    numToFit = Math.floor((availableW + 10) / (210 + 10));
                     if (numToFit < 1) numToFit = 1;
-                    if (numToFit > 10) numToFit = 10; // Cap at 10 items as requested for reference row
-
-                    // What width makes those items fill the space?
-                    let targetScaledW = (availableW - ((numToFit - 1) * 10)) / numToFit;
-                    if (targetScaledW < 210) targetScaledW = 210;
-
-                    globalScale = targetScaledW / refW;
+                    targetScaledW = (availableW - ((numToFit - 1) * 10)) / numToFit;
                 }
+
+                globalScale = targetScaledW / refW;
             }
 
             elements.forEach(element => {
@@ -2331,7 +2332,7 @@
                 const scProjToUse = isMoved ? sel.targetProject : sel.projectPath;
                 const scNameToUse = isMoved ? sel.targetProject : sel.projectName;
                 const scProjRes = getPSPathRes('\$BaseDir', scProjToUse, scNameToUse, '');
-                let scDirPath = `(Join-Path -Path (${scProjRes}) -ChildPath 'sc')`;
+                let scDirPath = `Join-Path -Path (${scProjRes}) -ChildPath 'sc'`;
                 
                 scriptLines.push(`    Manage-Shortcut -folderPath (${scDirPath}) -videoName '${escapedVideoName}' -targetPath \$targetPath -shouldExist ${wantSub ? '$true' : '$false'}`);
 
@@ -2386,9 +2387,9 @@
                 const currentlyInSubfolder = current && (current.type === 'subfolder-sc' || current.type === 'both-sc');
                 if (initiallyInSubfolder && !currentlyInSubfolder) {
                     const subPathRes = getPSPathRes('\$BaseDir', initial.projectPath, initial.projectName, '');
-                    let subPath = `(Join-Path -Path (${subPathRes}) -ChildPath 'sc')`;
+                    let subPath = `Join-Path -Path (${subPathRes}) -ChildPath 'sc'`;
                     
-                    const fullScPath = `(Join-Path -Path ${subPath} -ChildPath ('${escapedVideoName}' + '.lnk'))`;
+                    const fullScPath = `Join-Path -Path (${subPath}) -ChildPath ('${escapedVideoName}' + '.lnk')`;
                     const logPath = (escapedProjectPath ? escapedProjectPath + '\\' : '') + (escapedSubfolder ? escapedSubfolder + '\\' : '') + escapedVideoName;
                     deletions.push(`if (Test-Path -LiteralPath (${fullScPath})) { Remove-Item -LiteralPath (${fullScPath}); Write-Host "Deleted subfolder shortcut: ${logPath}" }`);
                 }
@@ -2396,8 +2397,8 @@
                 const initiallyInRoot = initial.type === 'root-sc' || initial.type === 'both-sc';
                 const currentlyInRoot = current && (current.type === 'root-sc' || current.type === 'both-sc');
                 if (initiallyInRoot && !currentlyInRoot) {
-                    const rootScFolder = `(Join-Path -Path \"$BaseDir\" -ChildPath 'sc')`;
-                    const fullScPath = `(Join-Path -Path ${rootScFolder} -ChildPath ('${escapedVideoName}' + '.lnk'))`;
+                    const rootScFolder = `Join-Path -Path \"$BaseDir\" -ChildPath 'sc'`;
+                    const fullScPath = `Join-Path -Path (${rootScFolder}) -ChildPath ('${escapedVideoName}' + '.lnk')`;
                     deletions.push(`if (Test-Path -LiteralPath (${fullScPath})) { Remove-Item -LiteralPath (${fullScPath}); Write-Host "Deleted root shortcut: ${escapedVideoName}" }`);
 
                 }
